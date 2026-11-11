@@ -1,0 +1,24 @@
+{
+  "name": "moroccan-chef",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multiplayer Moroccan Culinary Challenge - real-time cooking game with admin dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test/ui.test.js",
+    "test:sockets": "node test/flow.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "puppeteer-core": "^24.43.1",
+    "socket.io-client": "^4.8.4"
+  }
+}
