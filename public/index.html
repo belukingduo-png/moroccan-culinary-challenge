@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta name="theme-color" content="#0c1f1e" />
+<title>Moroccan Culinary Challenge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c2120'/%3E%3Cpath d='M32 10 L38 26 L54 32 L38 38 L32 54 L26 38 L10 32 L26 26 Z' fill='%23e8b44a'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=Marcellus&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="zellige" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">✦</span>
+    <div>
+      <h1>Moroccan Culinary Challenge</h1>
+      <p class="brand-sub">Master Chef of the Medina</p>
+    </div>
+  </div>
+  <button id="soundToggle" class="ghost-btn" title="Toggle sound" aria-label="Toggle sound">🔔 <span>sound</span></button>
+</header>
+
+<main>
+  <!-- ============ LANDING ============ -->
+  <section id="view-landing" class="view active">
+    <div class="landing-grid">
+      <div class="card hero">
+        <p class="eyebrow">Real-time · multi-device · 2–12 chefs</p>
+        <h2>One kitchen.<br />Every phone in the room.</h2>
+        <p class="lede">Chop, balance the spices, tame the flame and plate the dish. Everything you do shows up live on the host's screen.</p>
+        <div class="role-pick">
+          <button class="role-card" data-role="player">
+            <span class="role-icon">👩‍🍳</span>
+            <strong>Play as Chef</strong>
+            <small>Join with a room code</small>
+          </button>
+          <button class="role-card" data-role="host">
+            <span class="role-icon">🖥️</span>
+            <strong>Host a Kitchen</strong>
+            <small>Big screen dashboard</small>
+          </button>
+        </div>
+      </div>
+
+      <div class="card join-card" id="joinCard">
+        <h3>Join a kitchen</h3>
+        <form id="joinForm" autocomplete="off">
+          <label for="playerName">Chef name</label>
+          <input id="playerName" maxlength="16" placeholder="e.g. Yassine" required />
+          <label for="roomCode">Room code</label>
+          <input id="roomCode" maxlength="4" placeholder="4 letters" autocapitalize="characters" spellcheck="false" required />
+          <button class="primary-btn" type="submit">Enter the kitchen</button>
+          <p id="joinError" class="form-error" role="alert"></p>
+        </form>
+        <p class="fineprint">Host opens this page, taps <em>Host a Kitchen</em>, and reads out the code.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLAYER LOBBY ============ -->
+  <section id="view-lobby" class="view">
+    <div class="card lobby-card">
+      <p class="eyebrow">Kitchen <span class="code-pill" id="lobbyCode">----</span></p>
+      <h2>You're in, <span id="lobbyName">chef</span>.</h2>
+      <p class="lede">Waiting for the host to start the service. Keep this tab open.</p>
+      <ul class="roster" id="lobbyRoster"></ul>
+      <div class="waiting-dots"><span></span><span></span><span></span></div>
+    </div>
+  </section>
+
+  <!-- ============ PLAYER GAME ============ -->
+  <section id="view-game" class="view">
+    <div class="game-head">
+      <div class="stage-badge"><span id="stageIcon">🔪</span><span id="stageLabel">Prep &amp; Chopping</span></div>
+      <div class="head-right">
+        <div class="score-box"><small>score</small><strong id="scoreValue">0</strong></div>
+        <div class="timer-box"><small>time</small><strong id="timerValue">0.0</strong></div>
+      </div>
+    </div>
+    <div class="progress-track"><div id="stageProgress" class="progress-fill"></div></div>
+    <p class="stage-hint" id="stageHint"></p>
+
+    <!-- Stage 1 -->
+    <div class="card stage-panel" id="stage-prep">
+      <div class="chop-list" id="chopList"></div>
+      <div class="knife-wrap">
+        <div class="knife-track" id="knifeTrack">
+          <div class="knife-zone" id="knifeZone"></div>
+          <div class="knife-cursor" id="knifeCursor">🔪</div>
+        </div>
+        <p class="knife-tip">Tap when the blade is over the green band</p>
+      </div>
+      <button id="chopBtn" class="big-btn">CHOP</button>
+    </div>
+
+    <!-- Stage 2 -->
+    <div class="card stage-panel" id="stage-spice">
+      <p class="panel-note">Target proportions are on the recipe card. Match them, then balance.</p>
+      <div class="spice-rows" id="spiceRows"></div>
+      <div class="spice-foot">
+        <div class="total-box">mix total <strong id="spiceTotal">0</strong>/100</div>
+        <button id="spiceSubmit" class="primary-btn">Balance the spices</button>
+      </div>
+    </div>
+
+    <!-- Stage 3 -->
+    <div class="card stage-panel" id="stage-heat">
+      <div class="gauge" id="gauge">
+        <div class="sweet-band"></div>
+        <div class="needle" id="needle"></div>
+        <div class="gauge-labels"><span id="lowLabel">58</span><span id="highLabel">82</span></div>
+      </div>
+      <div class="hold-block">
+        <div class="hold-bar"><div class="hold-fill" id="holdFill"></div></div>
+        <p class="hold-note">Hold in the sweet spot: <strong id="holdProgress">0%</strong></p>
+      </div>
+      <button id="bellowsBtn" class="big-btn">🔥 HOLD TO FAN THE FLAME</button>
+    </div>
+
+    <!-- Stage 4 -->
+    <div class="card stage-panel" id="stage-plate">
+      <div class="plate" id="plate"><span class="plate-empty">tap garnishes below</span></div>
+      <p class="panel-note">Only the traditional garnishes for <span id="plateRecipe">this dish</span>.</p>
+      <div class="garnish-tray" id="garnishTray"></div>
+    </div>
+  </section>
+
+  <!-- ============ PLAYER RESULTS ============ -->
+  <section id="view-results" class="view">
+    <div class="card results-card">
+      <p class="eyebrow">Service complete</p>
+      <h2 id="resultTitle">You cooked!</h2>
+      <div class="result-score"><span id="resultScore">0</span><small>points</small></div>
+      <ul class="result-breakdown" id="resultBreakdown"></ul>
+      <div class="result-actions">
+        <button id="playAgainNote" class="ghost-btn">Waiting for the host to start a new service…</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ADMIN ============ -->
+  <section id="view-admin" class="view admin-view">
+    <div class="admin-head card">
+      <div class="admin-code">
+        <small>room code</small>
+        <strong id="adminCode">----</strong>
+        <div class="admin-code-actions">
+          <button id="copyCode" class="ghost-btn">Copy code</button>
+          <button id="copyLink" class="ghost-btn">Copy join link</button>
+        </div>
+      </div>
+      <div class="admin-controls">
+        <label for="recipePick">Recipe</label>
+        <select id="recipePick"></select>
+        <button id="startBtn" class="primary-btn">Start service</button>
+        <button id="resetBtn" class="ghost-btn">Reset</button>
+      </div>
+      <div class="admin-stats">
+        <div class="stat"><small>chefs</small><strong id="statChefs">0</strong></div>
+        <div class="stat"><small>plated</small><strong id="statDone">0</strong></div>
+        <div class="stat"><small>elapsed</small><strong id="statTime">0:00</strong></div>
+        <div class="stat"><small>phase</small><strong id="statPhase" class="phase-chip">lobby</strong></div>
+      </div>
+    </div>
+
+    <div class="admin-grid">
+      <div class="card board-card">
+        <div class="card-head"><h3>Live kitchen</h3><small id="boardHint">every chef's progress, as it happens</small></div>
+        <div class="players-grid" id="playersGrid">
+          <p class="empty-note">No chefs yet. Share the room code.</p>
+        </div>
+      </div>
+
+      <div class="card feed-card">
+        <div class="card-head">
+          <h3>Action feed</h3>
+          <div class="feed-filters" id="feedFilters">
+            <button class="chip active" data-filter="all">All</button>
+            <button class="chip" data-filter="errors">Mistakes</button>
+            <button class="chip" data-filter="joins">Joins</button>
+          </div>
+        </div>
+        <ul class="feed" id="feed" aria-live="polite"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="recipes.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
