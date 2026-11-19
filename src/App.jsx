@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-// --- FIREBASE CONFIG (Replace with your project config or public test config) ---
 const firebaseConfig = {
   databaseURL: "https://your-firebase-default-rtdb.firebaseio.com"
 };
@@ -20,15 +19,13 @@ export default function App() {
   const [inLobby, setInLobby] = useState(false);
   const [isHost, setIsHost] = useState(false);
   const [players, setPlayers] = useState({});
-  const [gameState, setGameState] = useState('waiting'); // waiting, playing, gameover
+  const [gameState, setGameState] = useState('waiting');
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
   
-  // Game state
   const [score, setScore] = useState(0);
   const [orders, setOrders] = useState([]);
   const [inventory, setInventory] = useState('empty');
 
-  // Create or Join Room
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
     setRoomCode(code);
@@ -50,7 +47,6 @@ export default function App() {
     setInLobby(true);
   };
 
-  // Sync with Firebase if available
   useEffect(() => {
     if (!inLobby || !db || !roomCode) return;
 
@@ -63,7 +59,6 @@ export default function App() {
       }
     });
 
-    // Register player
     const playerRef = ref(db, `rooms/${roomCode}/players/${myId}`);
     set(playerRef, { x: 100, y: 100, inventory: 'empty' });
 
@@ -78,100 +73,111 @@ export default function App() {
     }
   };
 
-  // If not in lobby yet, show menu
   if (!inLobby) {
     return (
       <div style={styles.menuContainer}>
+        <div style={styles.heroBadge}>✨ Moroccan Culinary Challenge ✨</div>
         <h1 style={styles.title}>🍳 Zellige & Saffron 🌶️</h1>
-        <p style={styles.subtitle}>Co-op Kitchen Chaos</p>
+        <p style={styles.subtitle}>Step into the bustling kitchens of Marrakech. Chop, cook, and serve together!</p>
+        
         <div style={styles.menuBox}>
-          <button onClick={createRoom} style={styles.primaryButton}>Create Kitchen (Host)</button>
-          <div style={{ margin: '20px 0', color: '#888' }}>- OR -</div>
+          <button onClick={createRoom} style={styles.primaryButton}>✨ Create New Kitchen (Host)</button>
+          <div style={styles.divider}>
+            <span style={styles.dividerText}>OR JOIN AN EXISTING KITCHEN</span>
+          </div>
           <form onSubmit={joinRoom} style={styles.form}>
             <input 
               type="text" 
-              placeholder="Enter Room Code" 
+              placeholder="ENTER 4-LETTER CODE" 
               value={roomCode} 
               onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
               style={styles.input}
             />
-            <button type="submit" style={styles.secondaryButton}>Join Kitchen</button>
+            <button type="submit" style={styles.secondaryButton}>Join Kitchen 🚪</button>
           </form>
         </div>
       </div>
     );
   }
 
-  // Lobby / Waiting screen for guests
   if (gameState === 'waiting') {
     return (
       <div style={styles.menuContainer}>
-        <h2 style={styles.title}>Kitchen Lobby: {roomCode}</h2>
-        {isHost ? (
-          <div>
-            <p style={{ color: '#4ade80', marginBottom: '20px' }}>You are the Head Chef (Host).</p>
-            <button onClick={startShift} style={styles.primaryButton}>Start Shift!</button>
-          </div>
-        ) : (
-          <div style={styles.waitingBox}>
-            <div style={styles.spinner}></div>
-            <p style={{ marginTop: '15px', fontSize: '18px', color: '#fff' }}>Waiting for Head Chef to start the shift...</p>
-          </div>
-        )}
+        <div style={styles.lobbyCard}>
+          <h2 style={styles.lobbyTitle}>Kitchen Lobby</h2>
+          <div style={styles.codeBadge}>Room Code: <strong>{roomCode}</strong></div>
+          
+          {isHost ? (
+            <div style={{ marginTop: '20px' }}>
+              <p style={{ color: '#34d399', marginBottom: '20px', fontWeight: '600' }}>👑 You are the Head Chef (Host)</p>
+              <button onClick={startShift} style={styles.primaryButton}>🚀 Start Kitchen Shift!</button>
+            </div>
+          ) : (
+            <div style={styles.waitingBox}>
+              <div style={styles.spinner}></div>
+              <p style={{ marginTop: '15px', color: '#cbd5e1' }}>Waiting for the Head Chef to start the shift...</p>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
 
-  // Active Game Screen
   return (
     <div style={styles.gameContainer}>
       <header style={styles.header}>
-        <div>Room: <strong>{roomCode}</strong></div>
-        <div style={styles.scoreBoard}>Score: {score} 🪙</div>
-        <div>Holding: <span style={{ color: '#fbbf24' }}>{inventory}</span></div>
+        <div style={styles.headerItem}>Room: <strong style={{ color: '#fbbf24' }}>{roomCode}</strong></div>
+        <div style={styles.scoreBoard}>🪙 Score: {score}</div>
+        <div style={styles.headerItem}>Holding: <span style={{ color: '#34d399', fontWeight: 'bold' }}>{inventory}</span></div>
       </header>
 
-      {/* Kitchen Floor */}
       <div style={styles.kitchenFloor}>
-        <div style={styles.stationTop}>🍅 Tomato Crate (Chop)</div>
-        <div style={styles.stationMiddle}>🔥 Cooking Pot</div>
-        <div style={styles.stationBottom}>🛎️ Serving Window</div>
+        <div style={styles.stationTop}>🍅 Tomato Crate (Chop Station)</div>
+        <div style={styles.stationMiddle}>🔥 Traditional Tagine Pot</div>
+        <div style={styles.stationBottom}>🛎️ Window Service Counter</div>
 
         <div style={styles.playerAvatar}>
-          chef
+          🧑‍🍳 Chef ({myId})
         </div>
       </div>
 
       <div style={styles.controlsBar}>
-        <button onClick={() => setInventory('Raw Tomato')} style={styles.actionBtn}>Grab Tomato</button>
-        <button onClick={() => setInventory('Chopped Tomato')} style={styles.actionBtn}>Chop</button>
-        <button onClick={() => setInventory('Cooked Tagine')} style={styles.actionBtn}>Cook</button>
-        <button onClick={() => { setScore(s => s + 10); setInventory('empty'); }} style={styles.serveBtn}>Serve Dish 🛎️</button>
+        <button onClick={() => setInventory('Raw Tomato')} style={styles.actionBtn}>🍅 Grab Tomato</button>
+        <button onClick={() => setInventory('Chopped Tomato')} style={styles.actionBtn}>🔪 Chop Tomato</button>
+        <button onClick={() => setInventory('Cooked Tagine')} style={styles.actionBtn}>🔥 Cook Tagine</button>
+        <button onClick={() => { setScore(s => s + 10); setInventory('empty'); }} style={styles.serveBtn}>🛎️ Serve Dish (+10 pts)</button>
       </div>
     </div>
   );
 }
 
 const styles = {
-  menuContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#1e1b4b', color: '#fff', fontFamily: 'sans-serif' },
-  title: { fontSize: '2.5rem', marginBottom: '10px' },
-  subtitle: { fontSize: '1.2rem', color: '#c7d2fe', marginBottom: '30px' },
-  menuBox: { background: '#312e81', padding: '30px', borderRadius: '12px', textAlign: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.3)' },
-  primaryButton: { background: '#10b981', color: '#fff', border: 'none', padding: '12px 24px', fontSize: '1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
-  secondaryButton: { background: '#6366f1', color: '#fff', border: 'none', padding: '12px 24px', fontSize: '1rem', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' },
-  form: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  input: { padding: '10px', borderRadius: '6px', border: '1px solid #4f46e5', fontSize: '1rem', textAlign: 'center', background: '#1e1b4b', color: '#fff' },
+  menuContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', color: '#fff', fontFamily: 'system-ui, -apple-system, sans-serif', padding: '20px' },
+  heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '6px 16px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '15px', textTransform: 'uppercase', letterSpacing: '1px' },
+  title: { fontSize: '3rem', marginBottom: '10px', fontWeight: '800', textAlign: 'center', textShadow: '0 4px 12px rgba(0,0,0,0.4)' },
+  subtitle: { fontSize: '1.1rem', color: '#cbd5e1', marginBottom: '35px', textAlign: 'center', maxWidth: '500px', lineHeight: '1.5' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.7)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '40px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', width: '100%', maxWidth: '420px' },
+  lobbyCard: { background: 'rgba(30, 27, 75, 0.8)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '40px', borderRadius: '20px', textAlign: 'center', boxShadow: '0 20px 40px rgba(0,0,0,0.5)', width: '100%', maxWidth: '450px' },
+  lobbyTitle: { fontSize: '2rem', marginBottom: '15px', fontWeight: '700' },
+  codeBadge: { background: '#4338ca', color: '#fff', padding: '10px 20px', borderRadius: '12px', fontSize: '1.3rem', display: 'inline-block', letterSpacing: '2px', margin: '10px 0 20px 0', border: '1px solid #6366f1' },
+  primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '14px 20px', fontSize: '1.05rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)', transition: 'transform 0.2s' },
+  secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '14px 20px', fontSize: '1.05rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold', boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)' },
+  divider: { margin: '25px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' },
+  dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 10px', fontSize: '0.75rem', color: '#94a3b8', letterSpacing: '1px' },
+  form: { display: 'flex', flexDirection: 'column', gap: '15px' },
+  input: { width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1.1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', letterSpacing: '2px', boxSizing: 'border-box' },
   waitingBox: { textAlign: 'center', marginTop: '20px' },
-  spinner: { width: '40px', height: '40px', border: '4px solid #c7d2fe', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' },
-  gameContainer: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#0f172a', color: '#fff', fontFamily: 'sans-serif' },
-  header: { display: 'flex', justifyContent: 'space-between', padding: '15px 30px', background: '#1e293b', borderBottom: '1px solid #334155', fontSize: '1.1rem' },
-  scoreBoard: { fontSize: '1.3rem', color: '#38bdf8', fontWeight: 'bold' },
-  kitchenFloor: { flex: 1, position: 'relative', background: '#334155', margin: '20px', borderRadius: '12px', display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignItems: 'center', padding: '20px', border: '4px dashed #475569' },
-  stationTop: { background: '#ef4444', padding: '15px 30px', borderRadius: '8px', fontWeight: 'bold' },
-  stationMiddle: { background: '#f59e0b', padding: '15px 30px', borderRadius: '8px', fontWeight: 'bold', color: '#000' },
-  stationBottom: { background: '#10b981', padding: '15px 30px', borderRadius: '8px', fontWeight: 'bold' },
-  playerAvatar: { background: '#6366f1', padding: '10px 20px', borderRadius: '20px', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' },
-  controlsBar: { display: 'flex', justifyContent: 'center', gap: '15px', padding: '20px', background: '#1e293b' },
-  actionBtn: { background: '#475569', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' },
-  serveBtn: { background: '#10b981', color: '#fff', border: 'none', padding: '10px 18px', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }
+  spinner: { width: '45px', height: '45px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto' },
+  gameContainer: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#090d16', color: '#fff', fontFamily: 'system-ui, sans-serif' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 30px', background: '#111827', borderBottom: '1px solid #1f2937', fontSize: '1.1rem', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' },
+  headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '10px', border: '1px solid #374151' },
+  scoreBoard: { fontSize: '1.3rem', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.1)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.3)' },
+  kitchenFloor: { flex: 1, position: 'relative', background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', margin: '20px', borderRadius: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-around', alignItems: 'center', padding: '30px', border: '3px dashed #334155', boxShadow: 'inset 0 10px 30px rgba(0,0,0,0.5)' },
+  stationTop: { background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)', padding: '16px 32px', borderRadius: '14px', fontWeight: 'bold', boxShadow: '0 8px 20px rgba(239, 68, 68, 0.3)', fontSize: '1.1rem' },
+  stationMiddle: { background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '16px 32px', borderRadius: '14px', fontWeight: 'bold', color: '#fff', boxShadow: '0 8px 20px rgba(245, 158, 11, 0.3)', fontSize: '1.1rem' },
+  stationBottom: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', padding: '16px 32px', borderRadius: '14px', fontWeight: 'bold', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)', fontSize: '1.1rem' },
+  playerAvatar: { background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', padding: '12px 24px', borderRadius: '30px', fontWeight: 'bold', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.4)', border: '2px solid rgba(255,255,255,0.2)' },
+  controlsBar: { display: 'flex', justifyContent: 'center', gap: '15px', padding: '20px 30px', background: '#111827', borderTop: '1px solid #1f2937' },
+  actionBtn: { background: '#374151', color: '#fff', border: '1px solid #4b5563', padding: '12px 20px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', transition: 'background 0.2s' },
+  serveBtn: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: '10px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.95rem', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' }
 };
