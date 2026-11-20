@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v1.9";
+const APP_VERSION = "v2.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,15 +16,15 @@ try {
   console.warn("Firebase error:", e);
 }
 
-// Dual Stations Setup (2 Cutting Pads, 2 Cooking Tagines)
+// Stations Setup with larger layout sizing and slots for current item
 const STATIONS = [
-  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 20, y: 20, color: '#ef4444' },
-  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 20, y: 40, color: '#f97316' },
-  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 20, y: 60, color: '#eab308' },
-  { id: 'crate_garlic', icon: '🧄', type: 'crate', item: '🧄', label: 'Caisse Ail', x: 20, y: 80, color: '#a855f7' },
+  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 15, y: 20, color: '#ef4444' },
+  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 15, y: 40, color: '#f97316' },
+  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 15, y: 60, color: '#eab308' },
+  { id: 'crate_garlic', icon: '🧄', type: 'crate', item: '🧄', label: 'Caisse Ail', x: 15, y: 80, color: '#a855f7' },
 
   { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe 1', x: 75, y: 25, color: '#3b82f6' },
-  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe 2', x: 75, y: 42, color: '#3b82f6' },
+  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe 2', x: 75, y: 45, color: '#3b82f6' },
 
   { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine 1', x: 50, y: 75, color: '#f59e0b' },
   { id: 'stove_2', icon: '🍲', type: 'stove', label: 'Tagine 2', x: 75, y: 75, color: '#f59e0b' },
@@ -67,8 +67,8 @@ export default function App() {
   const [myRecipe, setMyRecipe] = useState(RECIPES[0]);
   const [myContributions, setMyContributions] = useState(0);
 
-  // Station specific progress state for non-blocking timers
-  const [stationProgress, setStationProgress] = useState({}); // { stationId: { progress, label } }
+  // Station specific state: { [stationId]: { progress, label, currentItem, readyItem } }
+  const [stationStates, setStationStates] = useState({});
 
   const posRef = useRef({ x: 50, y: 50 });
   const heldRef = useRef('');
@@ -115,12 +115,13 @@ export default function App() {
   const interactStation = () => {
     if (gameState !== 'playing' || isHost) return;
     const { x, y } = posRef.current;
-    const nearby = STATIONS.find(s => Math.hypot(s.x - x, s.y - y) < 16);
+    const nearby = STATIONS.find(s => Math.hypot(s.x - x, s.y - y) < 18);
     if (!nearby) return;
 
     let currentItem = heldRef.current;
+    const stState = stationStates[nearby.id] || {};
 
-    // 1. Crate: Take ingredient
+    // 1. Crate: Take ingredient if hands are empty
     if (nearby.type === 'crate' && currentItem === '') {
       const item = nearby.item;
       heldRef.current = item;
@@ -128,28 +129,50 @@ export default function App() {
       addLog(`${playerEmoji} ${playerName} a pris ${item}`);
       syncMyState(posRef.current, item, contribRef.current);
     } 
-    // 2. Cutting Board (2s non-blocking timer)
-    else if (nearby.type === 'board' && currentItem !== '') {
-      if (stationProgress[nearby.id]) return; // Station busy
-      startNonBlockingAction(nearby.id, 2000, '🔪 Découpe...', () => {
-        const choppedMap = { '🍅': '🥗', '🌶️': '⚡', '🍗': '🍖', '🧄': '🧄' };
-        const next = choppedMap[currentItem] || '🥗';
-        heldRef.current = next;
-        setHeldItem(next);
-        addLog(`${playerEmoji} ${playerName} a découpé ${currentItem} ➔ ${next}`);
-        syncMyState(posRef.current, next, contribRef.current);
-      });
+    // 2. Cutting Board interaction
+    else if (nearby.type === 'board') {
+      // If finished item is waiting on the board, pick it up!
+      if (stState.readyItem && currentItem === '') {
+        const picked = stState.readyItem;
+        heldRef.current = picked;
+        setHeldItem(picked);
+        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
+        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} découpé`);
+        syncMyState(posRef.current, picked, contribRef.current);
+      } 
+      // If holding an item and board is free, place it down to start cutting (2s timer)
+      else if (currentItem !== '' && !stState.progress && !stState.readyItem) {
+        const itemToCut = currentItem;
+        heldRef.current = '';
+        setHeldItem('');
+        syncMyState(posRef.current, '', contribRef.current);
+
+        startStationAction(nearby.id, 2000, '🔪 Découpe...', itemToCut, (rawItem) => {
+          const choppedMap = { '🍅': '🥗', '🌶️': '⚡', '🍗': '🍖', '🧄': '🧄' };
+          return choppedMap[rawItem] || '🥗';
+        });
+      }
     } 
-    // 3. Stove / Tagine Pot (4s non-blocking cooking timer)
+    // 3. Stove / Tagine Pot interaction
     else if (nearby.type === 'stove') {
-      if (stationProgress[nearby.id]) return;
-      startNonBlockingAction(nearby.id, 4000, '🍲 Cuisson Tagine...', () => {
-        const cooked = '🍲';
-        heldRef.current = cooked;
-        setHeldItem(cooked);
-        addLog(`${playerEmoji} ${playerName} a cuit un plat au tagine 🔥`);
-        syncMyState(posRef.current, cooked, contribRef.current);
-      });
+      // If finished cooked dish is waiting, pick it up!
+      if (stState.readyItem && currentItem === '') {
+        const picked = stState.readyItem;
+        heldRef.current = picked;
+        setHeldItem(picked);
+        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
+        addLog(`${playerEmoji} ${playerName} a récupéré un plat chaud 🔥`);
+        syncMyState(posRef.current, picked, contribRef.current);
+      } 
+      // If holding an item and stove is free, place it down to cook (4s timer)
+      else if (currentItem !== '' && !stState.progress && !stState.readyItem) {
+        const itemToCook = currentItem;
+        heldRef.current = '';
+        setHeldItem('');
+        syncMyState(posRef.current, '', contribRef.current);
+
+        startStationAction(nearby.id, 4000, '🍲 Cuisson...', itemToCook, () => '🍲');
+      }
     } 
     // 4. Serving Counter
     else if (nearby.type === 'serve' && currentItem === '🍲') {
@@ -174,27 +197,32 @@ export default function App() {
     }
   };
 
-  const startNonBlockingAction = (stationId, duration, label, onComplete) => {
+  const startStationAction = (stationId, duration, label, placedItem, getResultItem) => {
     const intervalTime = 50;
     const steps = duration / intervalTime;
     let currentStep = 0;
 
-    setStationProgress(prev => ({ ...prev, [stationId]: { progress: 0, label } }));
+    setStationStates(prev => ({
+      ...prev,
+      [stationId]: { progress: 0, label, currentItem: placedItem, readyItem: null }
+    }));
 
     const timer = setInterval(() => {
       currentStep += 1;
       const progress = (currentStep / steps) * 100;
 
-      setStationProgress(prev => ({ ...prev, [stationId]: { progress, label } }));
+      setStationStates(prev => ({
+        ...prev,
+        [stationId]: { ...prev[stationId], progress }
+      }));
 
       if (currentStep >= steps) {
         clearInterval(timer);
-        setStationProgress(prev => {
-          const copy = { ...prev };
-          delete copy[stationId];
-          return copy;
-        });
-        onComplete();
+        const result = getResultItem(placedItem);
+        setStationStates(prev => ({
+          ...prev,
+          [stationId]: { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result }
+        }));
       }
     }, intervalTime);
   };
@@ -214,7 +242,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, stationProgress]);
+  }, [gameState, isHost, stationStates]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -363,6 +391,16 @@ export default function App() {
           0% { transform: translateY(-10vh) rotate(0deg); opacity: 0.8; }
           100% { transform: translateY(110vh) rotate(720deg); opacity: 0.1; }
         }
+        @keyframes knifeChopping {
+          0% { transform: rotate(0deg) translateY(0); }
+          50% { transform: rotate(-25deg) translateY(-6px); }
+          100% { transform: rotate(0deg) translateY(0); }
+        }
+        @keyframes bubblingPot {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.06); }
+          100% { transform: scale(1); }
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -370,6 +408,8 @@ export default function App() {
         * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .knife-anim { animation: knifeChopping 0.3s ease-in-out infinite; }
+        .stove-anim { animation: bubblingPot 0.6s ease-in-out infinite; }
         .falling-emoji {
           position: fixed;
           top: -60px;
@@ -539,13 +579,13 @@ export default function App() {
         </div>
       )}
 
-      {/* 6. ACTIVE GAMEPLAY WITH LEFT CAISSE ARRAY & NON-BLOCKING TIMERS */}
+      {/* ACTIVE GAMEPLAY SCREEN */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
             <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 10 ? '#ef4444' : '#fff' }}>{timeLeft}s</strong></div>
             <div style={styles.scoreBoard}>🪙 {score}</div>
-            <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.3rem' }}>{heldItem || '➖'}</span></div>
+            <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.4rem' }}>{heldItem || '➖'}</span></div>
           </header>
 
           <div style={styles.activeLayout}>
@@ -553,7 +593,7 @@ export default function App() {
             <div style={styles.recipeSidebar}>
               <h4 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '0.95rem' }}>📦 Caisse & Ingrédients :</h4>
               <div style={styles.recipeCardItem}>
-                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                <div style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.8' }}>
                   🍅 <strong>Tomate</strong><br/>
                   🌶️ <strong>Piment</strong><br/>
                   🍗 <strong>Poulet</strong><br/>
@@ -562,10 +602,13 @@ export default function App() {
               </div>
             </div>
 
-            {/* Kitchen Floor */}
+            {/* Kitchen Floor (Larger Sized Stations) */}
             <div style={styles.kitchenFloor}>
               {STATIONS.map((st) => {
-                const prog = stationProgress[st.id];
+                const stState = stationStates[st.id] || {};
+                const isWorking = stState.progress > 0;
+                const isReady = !!stState.readyItem;
+
                 return (
                   <div
                     key={st.id}
@@ -573,18 +616,39 @@ export default function App() {
                       ...styles.station,
                       left: `${st.x}%`,
                       top: `${st.y}%`,
-                      background: st.color
+                      background: st.color,
+                      borderColor: isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.2)')
                     }}
                   >
-                    <span style={{ fontSize: '1.8rem' }}>{st.icon}</span>
+                    {/* Animated Knife for Boards when working */}
+                    <div className={st.type === 'board' && isWorking ? 'knife-anim' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span className={st.type === 'stove' && isWorking ? 'stove-anim' : ''} style={{ fontSize: '2.2rem' }}>
+                        {st.icon}
+                      </span>
+                    </div>
+
                     <span style={styles.stationLabel}>{st.label}</span>
 
-                    {/* Non-blocking Station Progress Overlay */}
-                    {prog && (
+                    {/* Display item currently cooking/cutting inside or on the station */}
+                    {stState.currentItem && (
+                      <div style={styles.stationItemBadge}>
+                        {stState.currentItem}
+                      </div>
+                    )}
+
+                    {/* Display ready finished item waiting for pickup */}
+                    {isReady && (
+                      <div style={styles.readyItemBadge}>
+                        {stState.readyItem} ✨
+                      </div>
+                    )}
+
+                    {/* Progress Bar for Station Actions */}
+                    {isWorking && (
                       <div style={styles.stationTimerBadge}>
-                        <div style={{ fontSize: '0.6rem', color: '#fbbf24', fontWeight: '700' }}>{prog.label}</div>
+                        <div style={{ fontSize: '0.65rem', color: '#fbbf24', fontWeight: '700' }}>{stState.label}</div>
                         <div style={styles.miniTrack}>
-                          <div style={{ ...styles.miniFill, width: `${prog.progress}%` }}></div>
+                          <div style={{ ...styles.miniFill, width: `${stState.progress}%` }}></div>
                         </div>
                       </div>
                     )}
@@ -610,7 +674,7 @@ export default function App() {
                     }}
                   >
                     {pItem && <div style={styles.heldBubble}>{pItem}</div>}
-                    <div style={{ fontSize: '1.8rem' }}>{p.emoji}</div>
+                    <div style={{ fontSize: '2rem' }}>{p.emoji}</div>
                     <div style={styles.playerTag}>{p.name}</div>
                   </div>
                 );
@@ -709,16 +773,21 @@ const styles = {
   recipeCardItem: { background: 'rgba(30, 41, 59, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' },
 
   kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '2px dashed #334155', overflow: 'hidden' },
-  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '70px', height: '70px', borderRadius: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', border: '2px solid rgba(255,255,255,0.2)' },
-  stationLabel: { fontSize: '0.6rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)' },
   
-  stationTimerBadge: { position: 'absolute', bottom: '-22px', background: '#1e293b', padding: '2px 6px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', width: '80px', textAlign: 'center', zIndex: 20 },
+  // Upgraded larger station dimensions
+  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '84px', height: '84px', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '2px solid rgba(255,255,255,0.25)' },
+  stationLabel: { fontSize: '0.65rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)' },
+  
+  stationItemBadge: { position: 'absolute', top: '-14px', right: '-8px', background: '#334155', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: '2px solid #fbbf24', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' },
+  readyItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#10b981', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', border: '2px solid #fff', boxShadow: '0 0 12px rgba(16, 185, 129, 0.8)', animation: 'popScale 0.4s ease-out' },
+
+  stationTimerBadge: { position: 'absolute', bottom: '-26px', background: '#1e293b', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', width: '92px', textAlign: 'center', zIndex: 20 },
   miniTrack: { width: '100%', height: '5px', background: '#0f172a', borderRadius: '3px', overflow: 'hidden', marginTop: '2px' },
   miniFill: { height: '100%', background: 'linear-gradient(90deg, #f59e0b, #10b981)' },
 
-  playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.85)', padding: '4px 10px', borderRadius: '14px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
-  heldBubble: { position: 'absolute', top: '-26px', background: '#fff', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', boxShadow: '0 4px 8px rgba(0,0,0,0.4)' },
-  playerTag: { fontSize: '0.75rem', fontWeight: '700', color: '#e2e8f0', whiteSpace: 'nowrap' },
+  playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.85)', padding: '6px 12px', borderRadius: '16px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
+  heldBubble: { position: 'absolute', top: '-30px', background: '#fff', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '2px solid #f59e0b' },
+  playerTag: { fontSize: '0.8rem', fontWeight: '700', color: '#e2e8f0', whiteSpace: 'nowrap' },
 
   mobileControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 25px', background: '#111827', borderTop: '1px solid #1f2937' },
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 44px)', gridTemplateRows: 'repeat(2, 44px)', gap: '4px' },
