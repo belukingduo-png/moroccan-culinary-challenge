@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v1.3";
+const APP_VERSION = "v1.4";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -37,7 +37,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(60);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Kitchen Ready']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -198,7 +198,7 @@ export default function App() {
 
   const startShift = () => {
     if (Object.keys(players).length < 2) {
-      alert('⚠️ Minimum 2 Chefs required!');
+      alert('⚠️ Minimum 2 Chefs requis !');
       return;
     }
 
@@ -239,7 +239,7 @@ export default function App() {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         score: 0,
-        logs: [`👑 ${playerName} created room ${code}`]
+        logs: [`👑 ${playerName} a créé la cuisine ${code}`]
       });
     }
   };
@@ -274,6 +274,10 @@ export default function App() {
           50% { transform: scale(1.15); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
+        @keyframes fallAndSpin {
+          0% { transform: translateY(-10vh) rotate(0deg); opacity: 0.9; }
+          100% { transform: translateY(110vh) rotate(720deg); opacity: 0.1; }
+        }
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
@@ -281,21 +285,48 @@ export default function App() {
         * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .falling-chicken {
+          position: fixed;
+          top: -50px;
+          font-size: 2rem;
+          animation: fallAndSpin linear infinite;
+          z-index: 1;
+          pointer-events: none;
+        }
         button { transition: transform 0.2s, filter 0.2s; user-select: none; }
         button:active { transform: scale(0.93); }
       `}</style>
 
-      <div style={styles.versionBadge}>{APP_VERSION}</div>
+      {/* Falling Chicken Particles on Initial Screens */}
+      {(screen === 'profile' || screen === 'menu') && (
+        <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+          {[...Array(12)].map((_, i) => (
+            <div
+              key={i}
+              className="falling-chicken"
+              style={{
+                left: `${Math.random() * 100}%`,
+                animationDuration: `${4 + Math.random() * 5}s`,
+                animationDelay: `${Math.random() * 5}s`
+              }}
+            >
+              🍗
+            </div>
+          ))}
+        </div>
+      )}
 
+      {/* 1. PROFILE SETUP (Only place v1.4 is visible) */}
       {screen === 'profile' && (
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
+          <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <div style={styles.heroBadge}>✨ Zellige & Saffron ✨</div>
-            <h1 style={styles.title}>🧑‍🍳 Chef ID</h1>
+            <h1 style={styles.title}>🧑‍🍳 Identité du Chef</h1>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
                 type="text"
-                placeholder="Name..."
+                placeholder="Votre nom..."
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
                 style={styles.input}
@@ -317,40 +348,42 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              <button type="submit" style={styles.primaryButton}>➡️</button>
+              <button type="submit" style={styles.primaryButton}>Continuer ➡️</button>
             </form>
           </div>
         </div>
       )}
 
+      {/* 2. MENU */}
       {screen === 'menu' && (
         <div key="menu" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.menuBox}>
-            <div style={styles.heroBadge}>{playerEmoji} {playerName}</div>
+            <div style={styles.heroBadge}>Bienvenue, {playerEmoji} {playerName}</div>
             <h1 style={styles.title}>🍳 Zellige & Saffron</h1>
-            <button onClick={createRoom} style={styles.primaryButton}>👑 Host</button>
-            <div style={styles.divider}><span style={styles.dividerText}>OR</span></div>
+            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger la Cuisine</button>
+            <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
             <form onSubmit={joinRoom} style={styles.form}>
               <input
                 type="text"
-                placeholder="CODE"
+                placeholder="CODE DE SALON"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 style={styles.input}
                 required
               />
-              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Join</button>
+              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre</button>
             </form>
           </div>
         </div>
       )}
 
+      {/* 3. HOST FULL-SCREEN ADMIN DASHBOARD */}
       {isHost && (
         <div key="host" className="screen-anim" style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
-              <button onClick={copyRoomCode} style={styles.copyBtn} title="Copy Code">
+              <button onClick={copyRoomCode} style={styles.copyBtn} title="Copier le code">
                 {copied ? '✅' : '📋'}
               </button>
             </div>
@@ -360,10 +393,10 @@ export default function App() {
 
           <div style={styles.hostMainGrid}>
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>🧑‍🍳 Active Chefs ({Object.keys(players).length} / Min 2)</h3>
+              <h3 style={styles.panelTitle}>🧑‍🍳 Chefs Actifs ({Object.keys(players).length} / Min 2)</h3>
               <ul style={styles.playerList}>
                 {Object.keys(players).length === 0 ? (
-                  <p style={{ color: '#64748b', textAlign: 'center', marginTop: '30px' }}>Waiting for chefs to join...</p>
+                  <p style={{ color: '#64748b', textAlign: 'center', marginTop: '30px' }}>En attente de chefs...</p>
                 ) : (
                   Object.keys(players).map((pid) => (
                     <li key={pid} style={styles.playerItem}>
@@ -376,7 +409,7 @@ export default function App() {
             </div>
 
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>📜 Live Kitchen Feed</h3>
+              <h3 style={styles.panelTitle}>📜 Journal de Cuisine</h3>
               <div style={styles.logsBox}>
                 {logs.map((lg, idx) => (
                   <div key={idx} style={styles.logLine}>{lg}</div>
@@ -397,34 +430,37 @@ export default function App() {
                   cursor: Object.keys(players).length < 2 ? 'not-allowed' : 'pointer'
                 }}
               >
-                {gameState === 'gameover' ? '🔄 Restart Shift' : `🚀 Start Shift (${Object.keys(players).length}/2)`}
+                {gameState === 'gameover' ? '🔄 Relancer le Service' : `🚀 Démarrer (${Object.keys(players).length}/2)`}
               </button>
             ) : (
-              <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>🔥 Shift In Progress!</div>
+              <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>🔥 Service en Cours !</div>
             )}
           </div>
         </div>
       )}
 
+      {/* 4. PLAYER WAITING LOBBY */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.lobbyCard}>
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
             <h2 style={{ margin: '12px 0', fontSize: '1.6rem' }}>{playerEmoji} {playerName}</h2>
             <div style={styles.spinner}></div>
-            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ Waiting for Host...</p>
+            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal...</p>
           </div>
         </div>
       )}
 
+      {/* 5. DRAMATIC 3-2-1 COUNTDOWN */}
       {gameState === 'countdown' && (
         <div style={styles.countdownOverlay}>
           <div key={countdown} className="countdown-num" style={styles.countdownText}>
-            {countdown > 0 ? countdown : '🔥 GO!'}
+            {countdown > 0 ? countdown : '🔥 C’EST PARTI !'}
           </div>
         </div>
       )}
 
+      {/* 6. ACTIVE GAMEPLAY */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
@@ -491,19 +527,20 @@ export default function App() {
         </div>
       )}
 
+      {/* 7. GAME OVER & LEADERBOARD RESULTS SCREEN */}
       {gameState === 'gameover' && !isHost && (
         <div key="over" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.resultsCard}>
-            <h2 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '1.6rem' }}>🏁 Shift Complete!</h2>
-            <p style={{ fontSize: '1.2rem', margin: '5px 0' }}>Team Score: <strong>🪙 {score}</strong></p>
-            <p style={{ color: '#34d399', fontSize: '1rem', fontWeight: '600' }}>Your Contribution: {myContributions} pts</p>
+            <h2 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '1.6rem' }}>🏁 Service Terminé !</h2>
+            <p style={{ fontSize: '1.2rem', margin: '5px 0' }}>Score d’Équipe : <strong>🪙 {score}</strong></p>
+            <p style={{ color: '#34d399', fontSize: '1rem', fontWeight: '600' }}>Votre Contribution : {myContributions} pts</p>
 
             <div style={{ marginTop: '15px', textAlign: 'left' }}>
-              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', color: '#94a3b8' }}>📊 1-Min Global Leaderboard:</h4>
+              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', color: '#94a3b8' }}>📊 Classement Global (1 min) :</h4>
               <div style={styles.lbBox}>
                 {leaderboard.map((entry, idx) => (
                   <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
-                    <span style={{ fontWeight: '600' }}>#{idx + 1} Room {entry.room}</span>
+                    <span style={{ fontWeight: '600' }}>#{idx + 1} Salon {entry.room}</span>
                     <span style={{ color: '#38bdf8', fontWeight: '700' }}>🪙 {entry.score} pts</span>
                   </div>
                 ))}
@@ -511,7 +548,7 @@ export default function App() {
             </div>
 
             <button onClick={() => window.location.reload()} style={{ ...styles.primaryButton, marginTop: '15px' }}>
-              🔄 Play Again
+              🔄 Rejouer
             </button>
           </div>
         </div>
@@ -526,7 +563,7 @@ const styles = {
   centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '15px', boxSizing: 'border-box' },
   heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '5px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' },
   title: { fontSize: '2.2rem', margin: '5px 0 15px 0', fontWeight: '800', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.8)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '25px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '400px', boxSizing: 'border-box' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.8)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '25px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '400px', boxSizing: 'border-box', zIndex: 2 },
   lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '30px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '380px', boxSizing: 'border-box' },
   resultsCard: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '25px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '420px', boxSizing: 'border-box' },
   
@@ -555,7 +592,7 @@ const styles = {
   input: { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
   spinner: { width: '36px', height: '36px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-  countdownText: { fontSize: '6rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 40px rgba(251, 191, 36, 0.6)' },
+  countdownText: { fontSize: '5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 40px rgba(251, 191, 36, 0.6)', textAlign: 'center' },
   gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px', background: '#111827', borderBottom: '1px solid #1f2937' },
   headerItem: { background: '#1f2937', padding: '6px 14px', borderRadius: '10px', fontSize: '1rem', fontWeight: '600' },
