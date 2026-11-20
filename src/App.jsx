@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v1.4";
+const APP_VERSION = "v1.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -300,7 +300,7 @@ export default function App() {
       {/* Falling Chicken Particles on Initial Screens */}
       {(screen === 'profile' || screen === 'menu') && (
         <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-          {[...Array(12)].map((_, i) => (
+          {[...Array(14)].map((_, i) => (
             <div
               key={i}
               className="falling-chicken"
@@ -316,13 +316,13 @@ export default function App() {
         </div>
       )}
 
-      {/* 1. PROFILE SETUP (Only place v1.4 is visible) */}
+      {/* 1. PROFILE SETUP */}
       {screen === 'profile' && (
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <div style={styles.heroBadge}>✨ Zellige & Saffron ✨</div>
-            <h1 style={styles.title}>🧑‍🍳 Identité du Chef</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron 🌶️</h1>
+            <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
                 type="text"
@@ -359,7 +359,7 @@ export default function App() {
         <div key="menu" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.menuBox}>
             <div style={styles.heroBadge}>Bienvenue, {playerEmoji} {playerName}</div>
-            <h1 style={styles.title}>🍳 Zellige & Saffron</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
             <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger la Cuisine</button>
             <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
             <form onSubmit={joinRoom} style={styles.form}>
@@ -560,12 +560,13 @@ export default function App() {
 const styles = {
   appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', color: '#fff', position: 'relative' },
   versionBadge: { position: 'fixed', bottom: '10px', left: '14px', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255, 255, 255, 0.45)', background: 'rgba(0, 0, 0, 0.35)', padding: '3px 8px', borderRadius: '6px', zIndex: 100, pointerEvents: 'none', letterSpacing: '0.5px' },
-  centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '15px', boxSizing: 'border-box' },
+  centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px', boxSizing: 'border-box' },
   heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '5px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' },
-  title: { fontSize: '2.2rem', margin: '5px 0 15px 0', fontWeight: '800', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.8)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '25px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '400px', boxSizing: 'border-box', zIndex: 2 },
-  lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '30px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '380px', boxSizing: 'border-box' },
-  resultsCard: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '25px', borderRadius: '20px', textAlign: 'center', width: '100%', maxWidth: '420px', boxSizing: 'border-box' },
+  mainGameTitle: { fontSize: 'clamp(1.8rem, 3.5vw, 2.4rem)', margin: '0 0 5px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 10px rgba(251, 191, 36, 0.3)' },
+  subSubtitle: { fontSize: '1.2rem', color: '#cbd5e1', marginBottom: '20px', fontWeight: '700', textAlign: 'center' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.8)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '35px 30px', borderRadius: '24px', textAlign: 'center', width: '100%', maxWidth: '520px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 25px 50px rgba(0,0,0,0.5)' },
+  lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '35px 30px', borderRadius: '24px', textAlign: 'center', width: '100%', maxWidth: '440px', boxSizing: 'border-box', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' },
+  resultsCard: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '100%', maxWidth: '460px', boxSizing: 'border-box', boxShadow: '0 25px 50px rgba(0,0,0,0.5)' },
   
   hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.6)' },
   hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 25px', background: 'rgba(30, 27, 75, 0.85)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)' },
@@ -582,14 +583,14 @@ const styles = {
   playerItem: { background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.05)' },
   lbBox: { maxHeight: '140px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '10px', padding: '8px', border: '1px solid rgba(255,255,255,0.1)' },
   lbItem: { display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: '6px', fontSize: '0.9rem', marginBottom: '4px' },
-  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px', margin: '10px 0' },
-  emojiBtn: { fontSize: '1.3rem', padding: '6px', borderRadius: '10px', border: '1px solid', cursor: 'pointer' },
+  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', margin: '15px 0' },
+  emojiBtn: { fontSize: '1.4rem', padding: '8px', borderRadius: '10px', border: '1px solid', cursor: 'pointer' },
   primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '14px', fontSize: '1.1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
   secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '14px', fontSize: '1.1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
   divider: { margin: '15px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' },
   dividerText: { position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 8px', fontSize: '0.75rem', color: '#94a3b8' },
-  form: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  input: { width: '100%', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
+  form: { display: 'flex', flexDirection: 'column', gap: '12px' },
+  input: { width: '100%', padding: '14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
   spinner: { width: '36px', height: '36px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   countdownText: { fontSize: '5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 40px rgba(251, 191, 36, 0.6)', textAlign: 'center' },
