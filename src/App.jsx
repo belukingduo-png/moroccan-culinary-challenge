@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
 const firebaseConfig = {
-  databaseURL: "https://your-firebase-default-rtdb.firebaseio.com"
+  databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app/"
 };
 
 let db = null;
