@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v4.3";
+const APP_VERSION = "v4.4";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -66,12 +66,12 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.3 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.4 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
+  const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [myRole, setMyRole] = useState('prep');
-  const [pos, setPos] = useState({ x: 25, y: 50 });
+  const [pos, setPos] = useState({ x: 22, y: 50 });
   const [heldItem, setHeldItem] = useState('');
   const [myContributions, setMyContributions] = useState(0);
 
@@ -83,7 +83,7 @@ export default function App() {
   const [congratsModal, setCongratsModal] = useState(null);
   const [pausedTimer, setPausedTimer] = useState(false);
 
-  const posRef = useRef({ x: 25, y: 50 });
+  const posRef = useRef({ x: 22, y: 50 });
   const heldRef = useRef('');
   const contribRef = useRef(0);
   const scoreRef = useRef(0);
@@ -234,20 +234,13 @@ export default function App() {
         const item = nearby.item;
         heldRef.current = item;
         setHeldItem(item);
-        const newScore = scoreRef.current + 5;
-        const newContrib = contribRef.current + 5;
-        scoreRef.current = newScore;
-        contribRef.current = newContrib;
-        setScore(newScore);
-        setMyContributions(newContrib);
         
         syncLiveAchievement(
-          `✅ Ingrédient ${item} pris (+5 pts)`,
+          `✅ Ingrédient ${item} pris`,
           `Chef Gauche : Découper sur la planche 🔪`
         );
 
-        addLog(`${playerEmoji} ${playerName} a pris ${item} (+5 pts)`);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
+        addLog(`${playerEmoji} ${playerName} a pris ${item}`);
         syncMyState(posRef.current, item, contribRef.current);
       } else {
         addLog(`❌ Mauvais ingrédient ! Il faut ${activeTicket.requiredItem}`);
@@ -318,6 +311,13 @@ export default function App() {
       }
     }
     else if (nearby.type === 'pass') {
+      // STRICT CHECK: Cannot pass raw ingredients! Must be prepped (🥗, 🍖, 🌿) or cooked.
+      if (currentItem === activeTicket.requiredItem) {
+        addLog(`❌ ERREUR PASSE-PLATS : Vous devez d'abord découper l'ingrédient sur la planche 🔪 !`);
+        syncLiveAchievement(`❌ Découpez l'ingrédient d'abord !`, `Chef Gauche : Planche 🔪`);
+        return;
+      }
+
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
@@ -339,12 +339,20 @@ export default function App() {
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
         
         const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
+        const newScore = scoreRef.current + 5;
+        const newContrib = contribRef.current + 5;
+        scoreRef.current = newScore;
+        contribRef.current = newContrib;
+        setScore(newScore);
+        setMyContributions(newContrib);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
+
         syncLiveAchievement(
-          `✅ Posé sur le Passe-Plats 🪟`,
+          `✅ Posé sur le Passe-Plats 🪟 (+5 pts)`,
           `Chef Droit : Cuire dans ${correctPotName} 🔥`
         );
 
-        addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté !`);
+        addLog(`🪟 ${playerName} a passé ${dropped} (+5 pts) !`);
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
@@ -559,12 +567,14 @@ export default function App() {
       }
     });
 
-    const lbRef = ref(db, 'leaderboard');
+    const lbRef = ref(db, 'leaderboard_v44');
     const unsubLb = onValue(lbRef, (snapshot) => {
       const lbData = snapshot.val();
       if (lbData) {
         const sorted = Object.values(lbData).sort((a, b) => b.score - a.score);
         setLeaderboard(sorted);
+      } else {
+        setLeaderboard([]);
       }
     });
 
@@ -585,7 +595,7 @@ export default function App() {
         clearInterval(interval);
         if (isHost && db && roomCode) {
           update(ref(db, `rooms/${roomCode}`), { status: 'gameover' });
-          push(ref(db, 'leaderboard'), {
+          push(ref(db, 'leaderboard_v44'), {
             room: roomCode,
             score: scoreRef.current,
             date: new Date().toLocaleDateString()
@@ -646,15 +656,8 @@ export default function App() {
 
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const profile = getRandomUniqueProfile({});
     setRoomCode(code);
     setIsHost(true);
-    setMyRole('prep');
-    roleRef.current = 'prep';
-    setPlayerName(profile.name);
-    setPlayerEmoji(profile.emoji);
-    setPos({ x: 25, y: 50 });
-    posRef.current = { x: 25, y: 50 };
     setScreen('host_lobby');
 
     if (db) {
@@ -662,16 +665,7 @@ export default function App() {
         status: 'waiting',
         score: 0,
         stations: {},
-        logs: [`👑 ${profile.name} a ouvert la cuisine ${code}`]
-      });
-      set(ref(db, `rooms/${code}/players/${myId}`), {
-        name: profile.name,
-        emoji: profile.emoji,
-        x: 25,
-        y: 50,
-        item: '',
-        contributions: 0,
-        role: 'prep'
+        logs: [`👑 Salon ${code} ouvert par le Chef Hôte`]
       });
     }
   };
@@ -825,7 +819,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
-            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger une Partie</button>
+            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger une Partie (Hôte Spec)</button>
             <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
             <form onSubmit={joinRoom} style={styles.form}>
               <input
@@ -836,7 +830,7 @@ export default function App() {
                 style={styles.input}
                 required
               />
-              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre une Partie</button>
+              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre en tant que Joueur</button>
             </form>
             <button onClick={() => setScreen('home')} style={styles.backBtn}>⬅️ Retour</button>
           </div>
@@ -859,10 +853,10 @@ export default function App() {
 
           <div style={styles.hostMainGrid}>
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>🧑‍🍳 Chefs en Co-op ({Object.keys(players).length} / Min 2)</h3>
+              <h3 style={styles.panelTitle}>👑 Mode Hôte : Chefs en Ligne ({Object.keys(players).length} / Min 2)</h3>
               <ul style={styles.playerList}>
                 {Object.keys(players).length === 0 ? (
-                  <p style={{ color: '#94a3b8', textAlign: 'center', marginTop: '30px', fontSize: '1.1rem' }}>En attente de chefs...</p>
+                  <p style={{ color: '#94a3b8', textAlign: 'center', marginTop: '30px', fontSize: '1.1rem' }}>En attente de 2 joueurs connectés...</p>
                 ) : (
                   Object.keys(players).map((pid) => (
                     <li key={pid} style={styles.playerItem}>
@@ -905,7 +899,7 @@ export default function App() {
         </div>
       )}
 
-      {/* PLAYER LOBBY: ZERO-SCROLL 2-COLUMN LAYOUT */}
+      {/* PLAYER LOBBY */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.lobbyCardWide}>
@@ -916,19 +910,16 @@ export default function App() {
               </div>
             </div>
 
-            {/* 2-Column Split: Guide (Left) & Customization (Right) */}
             <div style={styles.lobbyGrid}>
-              {/* Left Column: Guide */}
               <div style={styles.guideBox}>
                 <h4 style={styles.guideTitle}>📖 Guide Rapide</h4>
                 <ul style={styles.guideList}>
                   <li><strong>Chef Gauche :</strong> Prends les ingrédients (caisses) et découpe sur la planche 🔪.</li>
-                  <li><strong>Passe-Plats :</strong> Utilisez 🪟 pour passer les ingrédients entre vous !</li>
+                  <li><strong>Passe-Plats :</strong> Utilisez 🪟 pour passer les ingrédients préparés !</li>
                   <li><strong>Chef Droit :</strong> Cuit dans les pots 🍲/🫖 et sert au comptoir 🛎️.</li>
                 </ul>
               </div>
 
-              {/* Right Column: Customization */}
               <div style={styles.customBox}>
                 <h4 style={styles.guideTitle}>✏️ Personnalisez votre Chef</h4>
                 <input
@@ -957,7 +948,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Bottom Loading Overlay */}
             <div style={styles.loadingFooter}>
               <div style={styles.spinnerSmall}></div>
               <span style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: '700' }}>⏳ En attente de l'hôte pour démarrer...</span>
@@ -1066,7 +1056,7 @@ export default function App() {
                   >
                     {pItem && <div style={styles.heldBubble}>{pItem}</div>}
                     <div style={{ fontSize: '2.4rem' }}>{displayEmoji}</div>
-                    <div style={styles.playerTag}>{displayName} ({p.role === 'prep' ? 'Gauche' : 'Droit'})</div>
+                    <div style={styles.playerTag}>{displayName}</div>
                   </div>
                 );
               })}
@@ -1153,12 +1143,16 @@ export default function App() {
             <div style={{ marginTop: '20px', textAlign: 'left' }}>
               <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', color: '#94a3b8', fontWeight: '800' }}>📊 Classement Global (120s) :</h4>
               <div style={styles.lbBox}>
-                {leaderboard.map((entry, idx) => (
-                  <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
-                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>#{idx + 1} Salon {entry.room}</span>
-                    <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '1rem' }}>🪙 {entry.score} pts</span>
-                  </div>
-                ))}
+                {leaderboard.length === 0 ? (
+                  <p style={{ color: '#94a3b8', textAlign: 'center', fontSize: '0.9rem', margin: '10px 0' }}>Aucun score enregistré (ardoise fraîche)</p>
+                ) : (
+                  leaderboard.map((entry, idx) => (
+                    <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
+                      <span style={{ fontWeight: '700', fontSize: '1rem' }}>#{idx + 1} Salon {entry.room}</span>
+                      <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '1rem' }}>🪙 {entry.score} pts</span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
 
@@ -1180,7 +1174,6 @@ const styles = {
   subSubtitle: { fontSize: '1.3rem', color: '#e2e8f0', marginBottom: '30px', fontWeight: '700', textAlign: 'center' },
   menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '620px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   
-  // Zero-scroll 2-column lobby styles
   lobbyCardWide: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '24px 28px', borderRadius: '28px', width: '100%', maxWidth: '780px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   lobbyGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' },
   guideBox: { background: 'rgba(15, 23, 42, 0.75)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
