@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v5.3";
+const APP_VERSION = "v5.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -34,31 +34,45 @@ const PLATFORMS = [
   { x: 1880, y: 310, w: 240, h: 24 }
 ];
 
-const SPRITE_FRAMES = {
-  idle: [{ col: 0, row: 0 }, { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }],
-  run: [{ col: 0, row: 2 }, { col: 1, row: 2 }, { col: 2, row: 2 }, { col: 3, row: 2 }],
-  jump: [{ col: 0, row: 3 }, { col: 1, row: 3 }, { col: 2, row: 3 }]
+// Exact pixel coordinates mapped to Chef W2.png for each strict state
+const SPRITE_STATES = {
+  idle: [{ x: 35, y: 18, w: 34, h: 42 }],                    // 1 frame standing
+  run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }], // 2 frames running
+  jump: [{ x: 28, y: 160, w: 42, h: 38 }],                   // 1 frame jumping
+  fall: [{ x: 72, y: 160, w: 42, h: 38 }]                    // 1 frame falling
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
-  const frames = SPRITE_FRAMES[anim] || SPRITE_FRAMES.idle;
-  const currentFrame = frames[frameTick % frames.length];
-  const posX = currentFrame.col * 20;
-  const posY = currentFrame.row * 25;
+  const frames = SPRITE_STATES[anim] || SPRITE_STATES.idle;
+  const f = frames[frameTick % frames.length];
+  const scale = 1.4;
 
   return (
     <div
       style={{
-        width: '56px',
-        height: '56px',
-        backgroundImage: 'url("/chef_sprite.png")',
-        backgroundSize: '600% 500%',
-        backgroundPosition: `${posX}% ${posY}%`,
-        imageRendering: 'pixelated',
+        width: `${f.w * scale}px`,
+        height: `${f.h * scale}px`,
+        overflow: 'hidden',
+        position: 'relative',
         transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
         filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))'
       }}
-    />
+    >
+      <img
+        src="/chef_sprite.png"
+        alt="Chef"
+        style={{
+          position: 'absolute',
+          left: `${-f.x * scale}px`,
+          top: `${-f.y * scale}px`,
+          width: `${296 * scale}px`,
+          height: `${256 * scale}px`,
+          imageRendering: 'pixelated',
+          maxWidth: 'none',
+          pointerEvents: 'none'
+        }}
+      />
+    </div>
   );
 }
 
@@ -71,7 +85,7 @@ export default function App() {
 
   const [players, setPlayers] = useState({});
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.3 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.5 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [pos, setPos] = useState({ x: 120, y: 450 });
@@ -106,12 +120,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (gameState !== 'playing') return;
     const animTimer = setInterval(() => {
       setFrameTick(prev => prev + 1);
-    }, 110);
+    }, 140);
     return () => clearInterval(animTimer);
-  }, [gameState]);
+  }, []);
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -140,7 +153,7 @@ export default function App() {
     const friction = 0.82;
     const moveSpeed = 1.4;
     const floorY = 460;
-    const spriteSize = 56;
+    const spriteSize = 60;
 
     const interval = setInterval(() => {
       let vx = velRef.current.x;
@@ -150,14 +163,15 @@ export default function App() {
       let currentAnim = 'idle';
       let isRight = facingRef.current;
 
-      if (keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A']) {
+      const movingLeft = keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A'];
+      const movingRight = keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D'];
+
+      if (movingLeft) {
         vx -= moveSpeed;
-        currentAnim = 'run';
         isRight = false;
       }
-      if (keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D']) {
+      if (movingRight) {
         vx += moveSpeed;
-        currentAnim = 'run';
         isRight = true;
       }
 
@@ -190,8 +204,13 @@ export default function App() {
         }
       });
 
+      // Strict state determination
       if (!grounded) {
-        currentAnim = 'jump';
+        currentAnim = vy < 0 ? 'jump' : 'fall';
+      } else if (Math.abs(vx) > 0.2 && (movingLeft || movingRight)) {
+        currentAnim = 'run';
+      } else {
+        currentAnim = 'idle';
       }
 
       if (px < 0) px = 0;
@@ -436,7 +455,7 @@ export default function App() {
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} />
             </div>
 
-            {/* Remote Players Render (Filtered out local player to fix double rendering) */}
+            {/* Remote Players Render */}
             {Object.keys(players)
               .filter(pid => pid !== myId)
               .map(pid => {
@@ -482,8 +501,7 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: '50', display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' }, // Removed transition to eliminate jitter
+  worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
   bush: { position: 'absolute', bottom: '80px', height: '36px', background: '#4ade80', border: '3px solid #16a34a', borderRadius: '12px 12px 0 0' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
