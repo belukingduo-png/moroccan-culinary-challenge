@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v5.5";
+const APP_VERSION = "v5.7";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -24,22 +24,25 @@ const RANDOM_NAMES = [
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
 const WORLD_WIDTH = 2400;
-const PLATFORMS = [
-  { x: 180, y: 360, w: 180, h: 24 },
-  { x: 440, y: 270, w: 200, h: 24 },
-  { x: 720, y: 350, w: 180, h: 24 },
-  { x: 980, y: 230, w: 220, h: 24 },
-  { x: 1300, y: 320, w: 200, h: 24 },
-  { x: 1600, y: 210, w: 180, h: 24 },
-  { x: 1880, y: 310, w: 240, h: 24 }
+const GROUND_HEIGHT = 80;
+const HITBOX_HALF_W = 18;
+
+const PLATFORM_LAYOUT = [
+  { x: 180, offsetFromGround: 130, w: 180, h: 24 },
+  { x: 440, offsetFromGround: 230, w: 200, h: 24 },
+  { x: 720, offsetFromGround: 140, w: 180, h: 24 },
+  { x: 980, offsetFromGround: 260, w: 220, h: 24 },
+  { x: 1300, offsetFromGround: 170, w: 200, h: 24 },
+  { x: 1600, offsetFromGround: 270, w: 180, h: 24 },
+  { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-// Exact pixel coordinates mapped to Chef W2.png for each strict state
+// Exact pixel coordinates mapped to Chef W2.png (Row 1, col 5 is parachute)
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 18, w: 34, h: 42 }],                    // 1 frame standing
   run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }], // 2 frames running
-  jump: [{ x: 28, y: 160, w: 42, h: 38 }],                   // 1 frame jumping
-  fall: [{ x: 72, y: 160, w: 42, h: 38 }]                    // 1 frame falling
+  jump: [{ x: 28, y: 160, w: 42, h: 38 }],                   // 1 frame jumping up
+  fall: [{ x: 188, y: 14, w: 46, h: 46 }]                    // 1 frame parachute falling
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
@@ -85,23 +88,26 @@ export default function App() {
 
   const [players, setPlayers] = useState({});
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.5 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.7 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  const [pos, setPos] = useState({ x: 120, y: 450 });
-  const [isGrounded, setIsGrounded] = useState(false);
+  const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
+  const initialFloorY = window.innerHeight - GROUND_HEIGHT;
+
+  const [pos, setPos] = useState({ x: 140, y: initialFloorY });
+  const [isGrounded, setIsGrounded] = useState(true);
   const [jumpsLeft, setJumpsLeft] = useState(2);
   const [animState, setAnimState] = useState('idle');
   const [facingRight, setFacingRight] = useState(true);
   const [frameTick, setFrameTick] = useState(0);
-  const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  const posRef = useRef({ x: 120, y: 450 });
+  const posRef = useRef({ x: 140, y: initialFloorY });
   const velRef = useRef({ x: 0, y: 0 });
-  const groundedRef = useRef(false);
+  const groundedRef = useRef(true);
   const jumpsRef = useRef(2);
   const facingRef = useRef(true);
   const keysPressed = useRef({});
+  const viewportRef = useRef(viewport);
 
   const backgroundParticles = useMemo(() => {
     return [...Array(15)].map((_, i) => ({
@@ -114,7 +120,11 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const handleResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    const handleResize = () => {
+      const nextVp = { w: window.innerWidth, h: window.innerHeight };
+      setViewport(nextVp);
+      viewportRef.current = nextVp;
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -134,11 +144,11 @@ export default function App() {
 
   const getRandomName = () => RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 
-  const syncMyState = (newPos, currentAnim, isRight) => {
+  const syncMyState = (newPos, floorY, currentAnim, isRight) => {
     if (db && roomCode && !isHost) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
         x: newPos.x,
-        y: newPos.y,
+        heightAboveGround: Math.max(0, floorY - newPos.y),
         name: playerName,
         anim: currentAnim,
         facingRight: isRight
@@ -149,17 +159,17 @@ export default function App() {
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
 
-    const gravity = 0.6;
+    const gravity = 0.65;
     const friction = 0.82;
-    const moveSpeed = 1.4;
-    const floorY = 460;
-    const spriteSize = 60;
+    const moveSpeed = 1.45;
 
     const interval = setInterval(() => {
+      const floorY = viewportRef.current.h - GROUND_HEIGHT;
       let vx = velRef.current.x;
       let vy = velRef.current.y;
       let px = posRef.current.x;
-      let py = posRef.current.y;
+      let prevY = posRef.current.y;
+      let py = prevY;
       let currentAnim = 'idle';
       let isRight = facingRef.current;
 
@@ -182,6 +192,7 @@ export default function App() {
       py += vy;
 
       let grounded = false;
+
       if (py >= floorY) {
         py = floorY;
         vy = 0;
@@ -189,32 +200,33 @@ export default function App() {
         jumpsRef.current = 2;
       }
 
-      PLATFORMS.forEach(plat => {
-        if (
-          px + spriteSize - 10 > plat.x &&
-          px + 10 < plat.x + plat.w &&
-          py + spriteSize >= plat.y &&
-          py + spriteSize <= plat.y + 20 &&
-          vy > 0
-        ) {
-          py = plat.y - spriteSize;
-          vy = 0;
-          grounded = true;
-          jumpsRef.current = 2;
-        }
-      });
+      if (vy >= 0) {
+        for (let i = 0; i < PLATFORM_LAYOUT.length; i++) {
+          const plat = PLATFORM_LAYOUT[i];
+          const platTop = floorY - plat.offsetFromGround;
+          const withinX = px + HITBOX_HALF_W > plat.x && px - HITBOX_HALF_W < plat.x + plat.w;
+          const crossedTop = prevY <= platTop + 4 && py >= platTop;
 
-      // Strict state determination
+          if (withinX && crossedTop) {
+            py = platTop;
+            vy = 0;
+            grounded = true;
+            jumpsRef.current = 2;
+            break;
+          }
+        }
+      }
+
       if (!grounded) {
         currentAnim = vy < 0 ? 'jump' : 'fall';
-      } else if (Math.abs(vx) > 0.2 && (movingLeft || movingRight)) {
+      } else if (Math.abs(vx) > 0.25 && (movingLeft || movingRight)) {
         currentAnim = 'run';
       } else {
         currentAnim = 'idle';
       }
 
-      if (px < 0) px = 0;
-      if (px > WORLD_WIDTH - spriteSize) px = WORLD_WIDTH - spriteSize;
+      if (px < HITBOX_HALF_W) px = HITBOX_HALF_W;
+      if (px > WORLD_WIDTH - HITBOX_HALF_W) px = WORLD_WIDTH - HITBOX_HALF_W;
 
       posRef.current = { x: px, y: py };
       velRef.current = { x: vx, y: vy };
@@ -227,7 +239,7 @@ export default function App() {
       setAnimState(currentAnim);
       setFacingRight(isRight);
 
-      syncMyState({ x: px, y: py }, currentAnim, isRight);
+      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight);
     }, 20);
 
     return () => clearInterval(interval);
@@ -240,7 +252,7 @@ export default function App() {
 
       if ((e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
-        velRef.current.y = -12;
+        velRef.current.y = -13;
         jumpsRef.current -= 1;
         setJumpsLeft(jumpsRef.current);
       }
@@ -300,20 +312,24 @@ export default function App() {
     setIsHost(false);
     const name = getRandomName();
     setPlayerName(name);
+    const spawnFloor = window.innerHeight - GROUND_HEIGHT;
+    posRef.current = { x: 140, y: spawnFloor };
+    setPos({ x: 140, y: spawnFloor });
     setScreen('player_lobby');
 
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
         name: name,
-        x: 120,
-        y: 450,
+        x: 140,
+        heightAboveGround: 0,
         anim: 'idle',
         facingRight: true
       });
     }
   };
 
-  const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w, pos.x - viewport.w / 2 + 28));
+  const floorY = viewport.h - GROUND_HEIGHT;
+  const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w, pos.x - viewport.w / 2));
 
   return (
     <div style={styles.appContainer}>
@@ -443,8 +459,17 @@ export default function App() {
             <div style={{ ...styles.bush, left: '1220px', width: '120px' }} />
             <div style={{ ...styles.bush, left: '1850px', width: '160px' }} />
 
-            {PLATFORMS.map((p, idx) => (
-              <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` }} />
+            {PLATFORM_LAYOUT.map((p, idx) => (
+              <div
+                key={idx}
+                style={{
+                  ...styles.platform,
+                  left: `${p.x}px`,
+                  top: `${floorY - p.offsetFromGround}px`,
+                  width: `${p.w}px`,
+                  height: `${p.h}px`
+                }}
+              />
             ))}
 
             <div style={styles.ground} />
@@ -460,8 +485,8 @@ export default function App() {
               .filter(pid => pid !== myId)
               .map(pid => {
                 const p = players[pid];
-                const px = p.x || 120;
-                const py = p.y || 450;
+                const px = p.x || 140;
+                const py = floorY - (p.heightAboveGround || 0);
                 const pAnim = p.anim || 'idle';
                 const pFacing = p.facingRight !== undefined ? p.facingRight : true;
 
@@ -506,6 +531,6 @@ const styles = {
   bush: { position: 'absolute', bottom: '80px', height: '36px', background: '#4ade80', border: '3px solid #16a34a', borderRadius: '12px 12px 0 0' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
   ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 16px, #78350f 16px, #78350f 32px)', borderTop: '8px solid #22c55e' },
-  playerNode: { position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
+  playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' }
 };
