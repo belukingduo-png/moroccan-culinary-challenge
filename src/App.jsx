@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v7.2";
+const APP_VERSION = "v7.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -38,9 +38,9 @@ const PLATFORM_LAYOUT = [
 ];
 
 const INITIAL_ITEMS = [
-  { id: 'item_1', x: 220, y: 130 + 12, type: '🍅', origin: { x: 220, y: 130 + 12 } },
-  { id: 'item_2', x: 780, y: 140 + 12, type: '🧄', origin: { x: 780, y: 140 + 12 } },
-  { id: 'item_3', x: 1350, y: 170 + 12, type: '🥖', origin: { x: 1350, y: 170 + 12 } }
+  { id: 'item_1', x: 220, y: 130, type: '🍅', origin: { x: 220, y: 130 } },
+  { id: 'item_2', x: 780, y: 140, type: '🧄', origin: { x: 780, y: 140 } },
+  { id: 'item_3', x: 1350, y: 170, type: '🥖', origin: { x: 1350, y: 170 } }
 ];
 
 const STATIONS = {
@@ -109,7 +109,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v7.2 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v7.3 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -188,16 +188,16 @@ export default function App() {
     const py = posRef.current.y;
 
     const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
-    const cbWorldY = floorY - cbPlatform.offsetFromGround - 24;
+    const cbWorldY = floorY - cbPlatform.offsetFromGround;
 
     const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
-    const potWorldY = floorY - potPlatform.offsetFromGround - 24;
+    const potWorldY = floorY - potPlatform.offsetFromGround;
 
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
-    const counterWorldY = floorY - counterPlatform.offsetFromGround - 24;
+    const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
     // 1. Serving Counter
-    if (Math.abs(px - STATIONS.counter.x) < 50 && Math.abs(py - counterWorldY) < 50) {
+    if (Math.abs(px - STATIONS.counter.x) < 55 && Math.abs(py - counterWorldY) < 55) {
       if (holdingItem) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
@@ -208,18 +208,18 @@ export default function App() {
       }
     }
 
-    // 2. Cutting Board Stand (3 seconds chop timer)
-    if (Math.abs(px - STATIONS.cuttingBoard.x) < 50 && Math.abs(py - cbWorldY) < 50) {
+    // 2. Cutting Board Stand (3 seconds chop timer - pure emoji only, no text)
+    if (Math.abs(px - STATIONS.cuttingBoard.x) < 55 && Math.abs(py - cbWorldY) < 55) {
       if (holdingItem && !stationRef.current.cuttingBoardItem && !stationRef.current.cuttingBoardActive) {
         const itemType = holdingItem;
         setHoldingItem(null);
-        const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
+        const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType, state: 'raw' }, cuttingBoardActive: true };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
         setTimeout(() => {
-          const finished = { type: '🔪 Chopped ' + itemType, state: 'chopped' };
+          const finished = { type: itemType, state: 'chopped' };
           stationRef.current = { ...stationRef.current, cuttingBoardItem: finished, cuttingBoardActive: false };
           setStationState(stationRef.current);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
@@ -235,8 +235,8 @@ export default function App() {
       }
     }
 
-    // 3. Pot (3 seconds cook timer)
-    if (Math.abs(px - STATIONS.pot.x) < 50 && Math.abs(py - potWorldY) < 50) {
+    // 3. Pot (3 seconds cook timer - pure emoji only, no text)
+    if (Math.abs(px - STATIONS.pot.x) < 55 && Math.abs(py - potWorldY) < 55) {
       if (holdingItem && !stationRef.current.potItem && !stationRef.current.potCooking) {
         setHoldingItem(null);
         const updatedStations = { ...stationRef.current, potCooking: true };
@@ -245,7 +245,7 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
         setTimeout(() => {
-          const finished = { type: '🍲 Tajine', state: 'cooked' };
+          const finished = { type: '🍲', state: 'cooked' };
           stationRef.current = { ...stationRef.current, potItem: finished, potCooking: false };
           setStationState(stationRef.current);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
@@ -371,7 +371,6 @@ export default function App() {
         jumpsRef.current = 2;
       }
 
-      // Strict one-way platform collision
       if (vy >= 0) {
         for (let i = 0; i < PLATFORM_LAYOUT.length; i++) {
           const plat = PLATFORM_LAYOUT[i];
@@ -491,13 +490,13 @@ export default function App() {
   const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 60));
 
   const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
-  const cbTop = floorY - cbPlatform.offsetFromGround - 34;
+  const cbTop = floorY - cbPlatform.offsetFromGround - 36;
 
   const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
-  const potTop = floorY - potPlatform.offsetFromGround - 48;
+  const potTop = floorY - potPlatform.offsetFromGround - 36;
 
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
-  const counterTop = floorY - counterPlatform.offsetFromGround - 54;
+  const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
   return (
     <div style={styles.appContainer}>
@@ -689,7 +688,7 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Station on Platform */}
+            {/* Cutting Board Station on Platform (No Text) */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div style={styles.cuttingBoardTop}>
@@ -708,19 +707,14 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Station on Platform */}
+            {/* Single Cooking Pot Station on Platform (No Text) */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
-                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-12px' }}>
+                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>
                   🍲
                 </div>
-                {stationState.potItem && !stationState.potCooking && (
-                  <div style={{ position: 'absolute', top: '-14px', left: '22px', fontSize: '1.6rem' }}>
-                    {stationState.potItem.type}
-                  </div>
-                )}
                 {stationState.potCooking && (
-                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-16px', left: '18px', fontSize: '1.4rem' }}>
+                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-14px', left: '16px', fontSize: '1.4rem' }}>
                     🔥 🔥
                   </div>
                 )}
@@ -728,13 +722,13 @@ export default function App() {
             </div>
 
             {/* Serving Counter Station on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 30}px`, top: `${counterTop}px`, textAlign: 'center' }}>
+            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients */}
+            {/* World Ingredients resting directly on platforms */}
             {worldItems.map((item, idx) => {
-              const itemTop = item.y === 0 ? floorY - 38 : floorY - item.y - 34;
+              const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
               return (
                 <div
                   key={idx}
