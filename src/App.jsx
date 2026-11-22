@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v3.3";
+const APP_VERSION = "v3.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,30 +16,32 @@ try {
   console.warn("Firebase error:", e);
 }
 
+// Stations split by Kitchen Zones (Left Prep Side vs Right Cook/Serve Side separated by barrier & pass counter)
 const STATIONS = [
-  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 20, color: '#ef4444' },
-  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 40, color: '#f97316' },
-  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 60, color: '#eab308' },
-  { id: 'crate_garlic', icon: '🧄', type: 'crate', item: '🧄', label: 'Caisse Ail', x: 12, y: 80, color: '#a855f7' },
+  // Left Side: Prep Zone (Crates & Cutting Boards)
+  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 25, color: '#ef4444', zone: 'prep' },
+  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 50, color: '#f97316', zone: 'prep' },
+  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 75, color: '#eab308', zone: 'prep' },
+  { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe 1', x: 32, y: 35, color: '#3b82f6', zone: 'prep' },
+  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe 2', x: 32, y: 65, color: '#3b82f6', zone: 'prep' },
 
-  { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe Prep 1', x: 35, y: 25, color: '#3b82f6' },
-  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe Prep 2', x: 35, y: 50, color: '#3b82f6' },
+  // Center: Pass-Through Counter (The Barrier Bridge)
+  { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 50, color: '#ec4899', zone: 'barrier' },
 
-  { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine Cuisson 1', x: 65, y: 25, color: '#f59e0b' },
-  { id: 'stove_2', icon: '🫖', type: 'stove', label: 'Tagine Cuisson 2', x: 65, y: 50, color: '#f59e0b' },
-
-  { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 82, color: '#ec4899' },
-  { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 20, color: '#64748b' },
-  { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981' },
+  // Right Side: Cook & Serve Zone (Stoves, Extinguisher, Service Counter)
+  { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine Cuisson 1', x: 68, y: 35, color: '#f59e0b', zone: 'cook' },
+  { id: 'stove_2', icon: '🫖', type: 'stove', label: 'Tagine Cuisson 2', x: 68, y: 65, color: '#f59e0b', zone: 'cook' },
+  { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 25, color: '#64748b', zone: 'cook' },
+  { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981', zone: 'cook' },
 ];
 
 const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'];
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
 const RECIPES = [
-  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredPrep: "🥗", requiredCook: "🍲", points: 15 },
-  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredPrep: "🍖", requiredCook: "🍲", points: 20 },
-  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredPrep: "🌿", requiredCook: "🫖", points: 15 }
+  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredPrep: "🥗", requiredCook: "🍲", points: 15, hint: "Prendre Tomate/Piment ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Cuire au Tagine 🍲 ➔ Servir 🛎️ !" },
+  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredPrep: "🍖", requiredCook: "🍲", points: 20, hint: "Prendre Poulet 🍗 ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Cuire 🍲 ➔ Servir 🛎️ !" },
+  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredPrep: "🌿", requiredCook: "🫖", points: 15, hint: "Prendre Menthe 🌿 ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Bouillir 🫖 ➔ Servir 🛎️ !" }
 ];
 
 export default function App() {
@@ -56,7 +58,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Prête (v3.3)']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.5 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -68,6 +70,7 @@ export default function App() {
   const [stationStates, setStationStates] = useState({});
   const [minigameData, setMinigameData] = useState(null);
   const [tempMinigame, setTempMinigame] = useState(null);
+  const [congratsModal, setCongratsModal] = useState(null);
 
   const posRef = useRef({ x: 50, y: 50 });
   const heldRef = useRef('');
@@ -109,7 +112,7 @@ export default function App() {
   };
 
   const movePlayer = (dx, dy) => {
-    if (gameState !== 'playing' || isHost || minigameData || tempMinigame) return;
+    if (gameState !== 'playing' || isHost || minigameData || tempMinigame || congratsModal) return;
     const nextX = Math.max(6, Math.min(95, posRef.current.x + dx));
     const nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
     const updated = { x: nextX, y: nextY };
@@ -127,7 +130,6 @@ export default function App() {
     let currentItem = heldRef.current;
     const stState = stationStates[nearby.id] || {};
 
-    // Handle Fire extinguishing
     if (stState.fire) {
       if (currentItem === '🧯' || nearby.type === 'extinguisher') {
         syncStationUpdate(nearby.id, { ...stState, fire: false, progress: 0 });
@@ -156,7 +158,6 @@ export default function App() {
       return;
     }
 
-    // 1. Crate: Take ingredient
     if (nearby.type === 'crate' && currentItem === '') {
       const item = nearby.item;
       heldRef.current = item;
@@ -164,7 +165,6 @@ export default function App() {
       addLog(`${playerEmoji} ${playerName} a pris ${item}`);
       syncMyState(posRef.current, item, contribRef.current);
     } 
-    // 2. Prep Cutting Board (Enforce alternate board if busy)
     else if (nearby.type === 'board') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
@@ -193,7 +193,6 @@ export default function App() {
         });
       }
     } 
-    // 3. Stoves / Tagines (Enforce alternate stove if busy)
     else if (nearby.type === 'stove') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
@@ -221,25 +220,23 @@ export default function App() {
         });
       }
     }
-    // 4. Central Pass-Through Counter
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats.`);
+        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats central.`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem !== '' && !stState.readyItem) {
         const dropped = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
-        addLog(`🪟 ${playerName} a déposé ${dropped} sur le passe-plats.`);
+        addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté via le passe-plats !`);
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
-    // 5. Serving Counter
     else if (nearby.type === 'serve') {
       if (currentItem === activeTicket.requiredCook || currentItem === '🍲' || currentItem === '🫖') {
         heldRef.current = '';
@@ -255,6 +252,12 @@ export default function App() {
         const nextRecipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
         setActiveTicket(nextRecipe);
 
+        setCongratsModal({
+          title: activeTicket.title,
+          points: pts,
+          nextRecipe: nextRecipe
+        });
+
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore, activeTicket: nextRecipe });
         syncMyState(posRef.current, '', contribRef.current);
       } else {
@@ -267,7 +270,6 @@ export default function App() {
     }
   };
 
-  // Temperature Slider Minigame Loop
   useEffect(() => {
     if (!tempMinigame) return;
     const interval = setInterval(() => {
@@ -322,16 +324,14 @@ export default function App() {
     }
   };
 
-  // Independent Grease Fire Generator for any stove station
   useEffect(() => {
     if (gameState !== 'playing' || !isHost) return;
     const fireInterval = setInterval(() => {
       const stoveStations = STATIONS.filter(s => s.type === 'stove');
       const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
       
-      // Fetch latest station state from database or local state
       const currentSt = stationStates[randomStove.id] || {};
-      if (!currentSt.fire && Math.random() < 0.3) {
+      if (!currentSt.fire && Math.random() < 0.25) {
         syncStationUpdate(randomStove.id, { ...currentSt, fire: true, label: '🔥 FEU !' });
         addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Éteignez-le vite (🧯) !`);
       }
@@ -343,6 +343,11 @@ export default function App() {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing' || isHost) return;
       const step = 4;
+      if (congratsModal && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        setCongratsModal(null);
+        return;
+      }
       if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
         handleMinigameTap();
@@ -364,7 +369,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, minigameData, tempMinigame, stationStates]);
+  }, [gameState, isHost, minigameData, tempMinigame, congratsModal, stationStates]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -481,7 +486,7 @@ export default function App() {
         status: 'waiting',
         score: 0,
         stations: {},
-        logs: [`👑 ${playerName} a ouvert la cuisine ${code}`]
+        logs: [`👑 ${playerName} a ouvert la cuisine co-op ${code}`]
       });
     }
   };
@@ -542,7 +547,7 @@ export default function App() {
         .falling-emoji {
           position: fixed;
           top: -60px;
-          font-size: 2.2rem;
+          font-size: 2.5rem;
           animation: fallAndSpinSmooth linear infinite;
           z-index: 1;
           pointer-events: none;
@@ -573,7 +578,7 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.3 🌶️</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.5 🌶️</h1>
             <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
@@ -631,7 +636,7 @@ export default function App() {
       {isHost && (
         <div key="host" className="screen-anim" style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
               <button onClick={copyRoomCode} style={styles.copyBtn} title="Copier le code">
                 {copied ? '✅' : '📋'}
@@ -646,12 +651,12 @@ export default function App() {
               <h3 style={styles.panelTitle}>🧑‍🍳 Chefs en Co-op ({Object.keys(players).length} / Min 2)</h3>
               <ul style={styles.playerList}>
                 {Object.keys(players).length === 0 ? (
-                  <p style={{ color: '#64748b', textAlign: 'center', marginTop: '30px' }}>En attente de chefs...</p>
+                  <p style={{ color: '#94a3b8', textAlign: 'center', marginTop: '30px', fontSize: '1.1rem' }}>En attente de chefs...</p>
                 ) : (
                   Object.keys(players).map((pid) => (
                     <li key={pid} style={styles.playerItem}>
-                      <span style={{ fontWeight: '600', fontSize: '1.05rem' }}>{players[pid].emoji} {players[pid].name}</span>
-                      <span style={{ color: '#34d399', fontWeight: '700', fontSize: '1.05rem' }}>{players[pid].contributions || 0} pts</span>
+                      <span style={{ fontWeight: '700', fontSize: '1.2rem' }}>{players[pid].emoji} {players[pid].name}</span>
+                      <span style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>{players[pid].contributions || 0} pts</span>
                     </li>
                   ))
                 )}
@@ -662,7 +667,7 @@ export default function App() {
               <h3 style={styles.panelTitle}>📜 Journal & Incidents de Cuisine</h3>
               <div style={styles.logsBox}>
                 {logs.map((lg, idx) => (
-                  <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') || lg.includes('FEU') ? '#ef4444' : '#cbd5e1' }}>{lg}</div>
+                  <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') || lg.includes('FEU') ? '#ef4444' : '#e2e8f0' }}>{lg}</div>
                 ))}
               </div>
             </div>
@@ -674,8 +679,8 @@ export default function App() {
                 onClick={startShift}
                 style={{
                   ...styles.primaryButton,
-                  maxWidth: '400px',
-                  fontSize: '1.2rem',
+                  maxWidth: '440px',
+                  fontSize: '1.3rem',
                   background: Object.keys(players).length < 2 ? '#374151' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
                   cursor: Object.keys(players).length < 2 ? 'not-allowed' : 'pointer'
                 }}
@@ -683,7 +688,7 @@ export default function App() {
                 {gameState === 'gameover' ? '🔄 Relancer le Service (120s)' : `🚀 Démarrer le Service (${Object.keys(players).length}/2)`}
               </button>
             ) : (
-              <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>🔥 Service Co-op en Cours !</div>
+              <div style={{ color: '#34d399', fontWeight: '900', fontSize: '1.4rem' }}>🔥 Service Co-op en Cours !</div>
             )}
           </div>
         </div>
@@ -693,19 +698,16 @@ export default function App() {
         <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.lobbyCard}>
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
-            <h2 style={{ margin: '12px 0', fontSize: '1.6rem' }}>{playerEmoji} {playerName}</h2>
+            <h2 style={{ margin: '15px 0', fontSize: '1.8rem', fontWeight: '800' }}>{playerEmoji} {playerName}</h2>
             <div style={styles.spinner}></div>
-            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal...</p>
+            <p style={{ marginTop: '18px', color: '#e2e8f0', fontSize: '1.15rem', fontWeight: '700' }}>⏳ En attente du Chef Principal...</p>
             
-            {/* Step by Step Guide for Players */}
             <div style={styles.instructionsBox}>
-              <h4 style={{ color: '#fbbf24', margin: '0 0 8px 0', fontSize: '0.95rem' }}>📖 Comment Jouer (Instructions) :</h4>
-              <ol style={{ textAlign: 'left', fontSize: '0.8rem', color: '#cbd5e1', paddingLeft: '18px', margin: 0, lineHeight: '1.5' }}>
-                <li><strong>Prendre l'ingrédient :</strong> Allez aux caisses à gauche (🍅, 🍗, etc.) et appuyez sur ⚡.</li>
-                <li><strong>Préparer :</strong> Apportez l'ingrédient à un poste de découpe (🔪) libre et jouez au mini-jeu de rythme.</li>
-                <li><strong>Cuire :</strong> Apportez l'ingrédient préparé à un tagine (🍲 / 🫖) libre et validez la température dans la zone verte.</li>
-                <li><strong>Servir :</strong> Apportez le plat cuit au Comptoir de Service (🛎️) pour marquer des points !</li>
-                <li><strong>Urgence :</strong> Si un feu éclate (🔥), prenez l'extincteur (🧯) pour l'éteindre immédiatement.</li>
+              <h4 style={{ color: '#fbbf24', margin: '0 0 12px 0', fontSize: '1.15rem', fontWeight: '800' }}>🤝 Guide du Travail en Équipe :</h4>
+              <ol style={{ textAlign: 'left', fontSize: '0.95rem', color: '#e2e8f0', paddingLeft: '22px', margin: 0, lineHeight: '1.6' }}>
+                <li><strong>Chef Gauche (Prep) :</strong> Prenez l'ingrédient aux caisses, découpez-le (🔪) et posez-le sur le <strong>Passe-Plats Central (🪟)</strong>.</li>
+                <li><strong>Chef Droit (Cook & Serve) :</strong> Récupérez l'ingrédient du Passe-Plats, cuisez-le au Tagine (🍲 / 🫖) et servez (🛎️).</li>
+                <li><strong>Urgences :</strong> Si un tagine prend feu (🔥), utilisez l'extincteur (🧯) pour l'éteindre immédiatement.</li>
               </ol>
             </div>
           </div>
@@ -724,35 +726,38 @@ export default function App() {
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
-            <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff' }}>{timeLeft}s</strong></div>
+            <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff', fontSize: '1.1rem' }}>{timeLeft}s</strong></div>
             <div style={styles.scoreBoard}>🪙 {score}</div>
-            <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.4rem' }}>{heldItem || '➖'}</span></div>
+            <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.6rem' }}>{heldItem || '➖'}</span></div>
           </header>
 
           <div style={styles.activeLayout}>
-            {/* Ticket & Instructions Sidebar */}
+            {/* Ticket & Teamwork Role Sidebar */}
             <div style={styles.recipeSidebar}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '0.95rem' }}>🎫 Ticket Actif :</h4>
+              <h4 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '1.1rem', fontWeight: '800' }}>🎫 Ticket Actif :</h4>
               <div style={styles.recipeCardItem}>
-                <div style={{ fontSize: '0.9rem', color: '#fff', fontWeight: '700', marginBottom: '6px' }}>{activeTicket.title}</div>
-                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: '1.6' }}>
-                  1. Prep : 🔪 <strong>{activeTicket.requiredPrep}</strong><br/>
-                  2. Cuisson : 🍲 <strong>{activeTicket.requiredCook}</strong><br/>
-                  Récompense : <span style={{ color: '#34d399', fontWeight: 'bold' }}>+{activeTicket.points} pts</span>
+                <div style={{ fontSize: '1.05rem', color: '#fff', fontWeight: '800', marginBottom: '8px' }}>{activeTicket.title}</div>
+                <div style={{ fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                  1. Prep (Gauche) : 🔪 <strong>{activeTicket.requiredPrep}</strong><br/>
+                  2. Transit : 🪟 <strong>Passe-Plats</strong><br/>
+                  3. Cuisson/Service (Droite) : 🍲 <strong>{activeTicket.requiredCook}</strong><br/>
+                  Récompense : <span style={{ color: '#34d399', fontWeight: '800' }}>+{activeTicket.points} pts</span>
                 </div>
               </div>
 
-              <h4 style={{ margin: '15px 0 8px 0', color: '#fbbf24', fontSize: '0.9rem' }}>📖 Aide Rapide :</h4>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: '1.4' }}>
-                • 🍅 Tomate / 🍗 Poulet aux caisses.<br/>
-                • 🔪 Découpe 1 ou 2 (mini-jeu de rythme).<br/>
-                • 🍲 Tagine 1 ou 2 (contrôle température).<br/>
-                • 🧯 Éteignez les feux immédiatement !
+              <h4 style={{ margin: '18px 0 10px 0', color: '#fbbf24', fontSize: '1.05rem', fontWeight: '800' }}>🤝 Rôles d'Équipe :</h4>
+              <div style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                • <strong>Gauche (Prep) :</strong> Caisses + Planches 🔪<br/>
+                • <strong>Milieu :</strong> Passe-Plats 🪟 (Barrière)<br/>
+                • <strong>Droite (Cook) :</strong> Tagines 🍲 + Service 🛎️
               </div>
             </div>
 
-            {/* Kitchen Floor */}
+            {/* Kitchen Floor with Center Barrier */}
             <div style={styles.kitchenFloor}>
+              <div style={styles.barrierLine}></div>
+              <div style={styles.barrierLabel}>🪟 PASSE-PLATS CENTRAL</div>
+
               {STATIONS.map((st) => {
                 const stState = stationStates[st.id] || {};
                 const isWorking = stState.progress > 0;
@@ -767,11 +772,11 @@ export default function App() {
                       left: `${st.x}%`,
                       top: `${st.y}%`,
                       background: hasFire ? '#991b1b' : st.color,
-                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.25)'))
+                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.3)'))
                     }}
                   >
                     <div className={hasFire ? 'fire-anim' : (st.type === 'board' && isWorking ? 'knife-anim' : '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <span style={{ fontSize: '2rem' }}>
+                      <span style={{ fontSize: '2.4rem' }}>
                         {hasFire ? '🔥' : st.icon}
                       </span>
                     </div>
@@ -803,11 +808,11 @@ export default function App() {
                       ...styles.playerNode,
                       left: `${px}%`,
                       top: `${py}%`,
-                      border: isMe ? '2px solid #fbbf24' : '2px solid rgba(255,255,255,0.3)'
+                      border: isMe ? '3px solid #fbbf24' : '3px solid rgba(255,255,255,0.4)'
                     }}
                   >
                     {pItem && <div style={styles.heldBubble}>{pItem}</div>}
-                    <div style={{ fontSize: '2rem' }}>{p.emoji}</div>
+                    <div style={{ fontSize: '2.4rem' }}>{p.emoji}</div>
                     <div style={styles.playerTag}>{p.name}</div>
                   </div>
                 );
@@ -815,13 +820,36 @@ export default function App() {
             </div>
           </div>
 
+          {/* Congrats / Recipe Level-Up Overlay Modal */}
+          {congratsModal && (
+            <div style={styles.minigameOverlay}>
+              <div style={styles.congratsCard}>
+                <h2 style={{ color: '#10b981', fontSize: '2.4rem', margin: '0 0 12px 0', fontWeight: '900' }}>🎉 FÉLICITATIONS !</h2>
+                <p style={{ fontSize: '1.25rem', color: '#fff', margin: '8px 0', lineHeight: '1.5' }}>
+                  Vous avez servi <strong>{congratsModal.title}</strong> avec succès ! (+{congratsModal.points} pts)
+                </p>
+                <div style={styles.divider}></div>
+                <h4 style={{ color: '#fbbf24', margin: '12px 0 8px 0', fontSize: '1.2rem', fontWeight: '800' }}>📜 PROCHAINE COMMANDE & INSTRUCTIONS :</h4>
+                <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '18px', borderRadius: '16px', margin: '12px 0', border: '1px solid rgba(255,255,255,0.15)' }}>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#38bdf8', marginBottom: '8px' }}>{congratsModal.nextRecipe.title}</div>
+                  <div style={{ fontSize: '1.05rem', color: '#e2e8f0', lineHeight: '1.6' }}>
+                    {congratsModal.nextRecipe.hint}
+                  </div>
+                </div>
+                <button onClick={() => setCongratsModal(null)} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
+                  CONTINUER LE SERVICE 🚀 (ESPACE)
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Rhythm Chopping Minigame Modal */}
           {minigameData && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#fbbf24' }}>🔪 Découpe en Cadence !</h3>
-                <p style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{minigameData.label}</p>
-                <div style={{ fontSize: '2.5rem', margin: '15px 0' }}>{minigameData.item} ➔ 🥗</div>
+                <h3 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '1.5rem', fontWeight: '800' }}>🔪 Découpe en Cadence !</h3>
+                <p style={{ fontSize: '1.1rem', color: '#cbd5e1' }}>{minigameData.label}</p>
+                <div style={{ fontSize: '3rem', margin: '18px 0' }}>{minigameData.item} ➔ 🥗</div>
                 <div style={styles.miniTrackLarge}>
                   <div style={{ ...styles.miniFillLarge, width: `${(minigameData.currentTaps / minigameData.targetTaps) * 100}%` }}></div>
                 </div>
@@ -836,15 +864,15 @@ export default function App() {
           {tempMinigame && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
-                <h3 style={{ margin: '0 0 10px 0', color: '#f59e0b' }}>🔥 Contrôle de Température Tagine !</h3>
-                <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '10px' }}>Appuyez quand l'indicateur est dans la zone verte !</p>
+                <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '1.5rem', fontWeight: '800' }}>🔥 Contrôle de Température Tagine !</h3>
+                <p style={{ fontSize: '1.05rem', color: '#cbd5e1', marginBottom: '12px' }}>Appuyez quand l'indicateur est dans la zone verte !</p>
                 
                 <div style={styles.tempBarContainer}>
                   <div style={styles.tempGreenZone}></div>
                   <div style={{ ...styles.tempIndicator, left: `${tempMinigame.sliderPos}%` }}></div>
                 </div>
 
-                <button onClick={handleTempSubmit} style={{ ...styles.tapActionBtn, background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', marginTop: '20px' }}>
+                <button onClick={handleTempSubmit} style={{ ...styles.tapActionBtn, background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', marginTop: '22px' }}>
                   🎯 VALIDER LA CUISSON (ESPACE)
                 </button>
               </div>
@@ -868,23 +896,23 @@ export default function App() {
       {gameState === 'gameover' && !isHost && (
         <div key="over" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.resultsCard}>
-            <h2 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '1.6rem' }}>🏁 Service Co-op Terminé !</h2>
-            <p style={{ fontSize: '1.2rem', margin: '5px 0' }}>Score d’Équipe : <strong>🪙 {score}</strong></p>
-            <p style={{ color: '#34d399', fontSize: '1rem', fontWeight: '600' }}>Votre Contribution : {myContributions} pts</p>
+            <h2 style={{ margin: '0 0 15px 0', color: '#fbbf24', fontSize: '2rem', fontWeight: '900' }}>🏁 Service Co-op Terminé !</h2>
+            <p style={{ fontSize: '1.35rem', margin: '8px 0' }}>Score d’Équipe : <strong>🪙 {score}</strong></p>
+            <p style={{ color: '#34d399', fontSize: '1.15rem', fontWeight: '700' }}>Votre Contribution : {myContributions} pts</p>
 
-            <div style={{ marginTop: '15px', textAlign: 'left' }}>
-              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', color: '#94a3b8' }}>📊 Classement Global (120s) :</h4>
+            <div style={{ marginTop: '20px', textAlign: 'left' }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', color: '#94a3b8', fontWeight: '800' }}>📊 Classement Global (120s) :</h4>
               <div style={styles.lbBox}>
                 {leaderboard.map((entry, idx) => (
                   <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
-                    <span style={{ fontWeight: '600' }}>#{idx + 1} Salon {entry.room}</span>
-                    <span style={{ color: '#38bdf8', fontWeight: '700' }}>🪙 {entry.score} pts</span>
+                    <span style={{ fontWeight: '700', fontSize: '1rem' }}>#{idx + 1} Salon {entry.room}</span>
+                    <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '1rem' }}>🪙 {entry.score} pts</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <button onClick={() => window.location.reload()} style={{ ...styles.primaryButton, marginTop: '15px' }}>
+            <button onClick={() => window.location.reload()} style={{ ...styles.primaryButton, marginTop: '20px', fontSize: '1.2rem' }}>
               🔄 Rejouer le Service
             </button>
           </div>
@@ -896,65 +924,68 @@ export default function App() {
 
 const styles = {
   appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', color: '#fff', position: 'relative' },
-  versionBadge: { position: 'fixed', bottom: '10px', left: '14px', fontSize: '0.75rem', fontWeight: '700', color: 'rgba(255, 255, 255, 0.45)', background: 'rgba(0, 0, 0, 0.35)', padding: '3px 8px', borderRadius: '6px', zIndex: 100, pointerEvents: 'none', letterSpacing: '0.5px' },
+  versionBadge: { position: 'fixed', bottom: '12px', left: '16px', fontSize: '0.85rem', fontWeight: '800', color: 'rgba(255, 255, 255, 0.55)', background: 'rgba(0, 0, 0, 0.45)', padding: '4px 10px', borderRadius: '8px', zIndex: 100, pointerEvents: 'none', letterSpacing: '0.5px' },
   centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px', boxSizing: 'border-box' },
-  heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '5px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' },
-  mainGameTitle: { fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)', margin: '0 0 5px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 12px rgba(251, 191, 36, 0.3)' },
-  subSubtitle: { fontSize: '1.35rem', color: '#cbd5e1', marginBottom: '25px', fontWeight: '700', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '35px 30px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '620px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
-  lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '30px', borderRadius: '26px', textAlign: 'center', width: '100%', maxWidth: '500px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
-  instructionsBox: { marginTop: '15px', background: 'rgba(15, 23, 42, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' },
-  resultsCard: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '35px', borderRadius: '26px', textAlign: 'center', width: '100%', maxWidth: '500px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
-  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.6)' },
-  hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 25px', background: 'rgba(30, 27, 75, 0.85)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)' },
-  hostMainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', margin: '20px 0', minHeight: 0 },
-  hostFooter: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '10px 0' },
-  dashPanel: { background: 'rgba(30, 27, 75, 0.75)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  panelTitle: { margin: '0 0 12px 0', fontSize: '1.1rem', fontWeight: '700', color: '#e2e8f0', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' },
-  logsBox: { flex: 1, overflowY: 'auto', background: 'rgba(15, 23, 42, 0.6)', padding: '12px', borderRadius: '10px' },
-  logLine: { fontSize: '0.95rem', marginBottom: '6px', lineHeight: '1.4' },
-  copyBtn: { background: 'rgba(99, 102, 241, 0.25)', border: '1px solid #6366f1', color: '#fff', padding: '8px 12px', borderRadius: '10px', cursor: 'pointer', fontSize: '1.1rem' },
-  codeBadge: { background: '#4338ca', padding: '8px 16px', borderRadius: '10px', fontSize: '1.2rem', letterSpacing: '2px', border: '1px solid #6366f1', fontWeight: '700' },
-  playerList: { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 },
-  playerItem: { background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.05)' },
-  lbBox: { maxHeight: '140px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '10px', padding: '8px', border: '1px solid rgba(255,255,255,0.1)' },
-  lbItem: { display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: '6px', fontSize: '0.9rem', marginBottom: '4px' },
-  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', margin: '15px 0' },
-  emojiBtn: { fontSize: '1.6rem', padding: '10px', borderRadius: '14px', border: '1px solid', cursor: 'pointer' },
-  primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.15rem', borderRadius: '14px', cursor: 'pointer', fontWeight: 'bold' },
-  secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.15rem', borderRadius: '14px', cursor: 'pointer', fontWeight: 'bold' },
-  divider: { margin: '15px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' },
-  dividerText: { position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 8px', fontSize: '0.75rem', color: '#94a3b8' },
-  form: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  input: { width: '100%', padding: '14px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1.1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
-  spinner: { width: '32px', height: '32px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
-  countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-  countdownText: { fontSize: '5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 40px rgba(251, 191, 36, 0.6)', textAlign: 'center' },
+  heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '6px 16px', borderRadius: '20px', fontSize: '1rem', fontWeight: 'bold', marginBottom: '12px' },
+  mainGameTitle: { fontSize: 'clamp(2.4rem, 5vw, 3.5rem)', margin: '0 0 8px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 14px rgba(251, 191, 36, 0.35)' },
+  subSubtitle: { fontSize: '1.5rem', color: '#e2e8f0', marginBottom: '25px', fontWeight: '800', textAlign: 'center' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '660px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  lobbyCard: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '35px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '580px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  instructionsBox: { marginTop: '18px', background: 'rgba(15, 23, 42, 0.8)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.12)' },
+  resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.7)' },
+  hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', background: 'rgba(30, 27, 75, 0.88)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.12)' },
+  hostMainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px', margin: '22px 0', minHeight: 0 },
+  hostFooter: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 0' },
+  dashPanel: { background: 'rgba(30, 27, 75, 0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
+  panelTitle: { margin: '0 0 14px 0', fontSize: '1.25rem', fontWeight: '800', color: '#f1f5f9', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '10px' },
+  logsBox: { flex: 1, overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', padding: '14px', borderRadius: '12px' },
+  logLine: { fontSize: '1.05rem', marginBottom: '8px', lineHeight: '1.5' },
+  copyBtn: { background: 'rgba(99, 102, 241, 0.3)', border: '1px solid #6366f1', color: '#fff', padding: '10px 14px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.2rem' },
+  codeBadge: { background: '#4338ca', padding: '10px 18px', borderRadius: '12px', fontSize: '1.35rem', letterSpacing: '2px', border: '1px solid #6366f1', fontWeight: '800' },
+  playerList: { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1 },
+  playerItem: { background: 'rgba(15, 23, 42, 0.7)', padding: '14px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)' },
+  lbBox: { maxHeight: '160px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '12px', padding: '10px', border: '1px solid rgba(255,255,255,0.12)' },
+  lbItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', fontSize: '1rem', marginBottom: '6px' },
+  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', margin: '18px 0' },
+  emojiBtn: { fontSize: '1.8rem', padding: '12px', borderRadius: '16px', border: '1px solid', cursor: 'pointer' },
+  primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)' },
+  secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)' },
+  divider: { margin: '18px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.15)' },
+  dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 10px', fontSize: '0.85rem', color: '#94a3b8', fontWeight: '800' },
+  form: { display: 'flex', flexDirection: 'column', gap: '16px' },
+  input: { width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.7)', color: '#fff', boxSizing: 'border-box' },
+  spinner: { width: '38px', height: '38px', border: '4px solid rgba(255,255,255,0.12)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
+  countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
+  countdownText: { fontSize: '6rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 50px rgba(251, 191, 36, 0.7)', textAlign: 'center' },
   gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px', background: '#111827', borderBottom: '1px solid #1f2937' },
-  headerItem: { background: '#1f2937', padding: '6px 14px', borderRadius: '10px', fontSize: '1rem', fontWeight: '600' },
-  scoreBoard: { fontSize: '1.3rem', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.15)', padding: '8px 18px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.3)' },
-  activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '10px', gap: '10px' },
-  recipeSidebar: { width: '240px', background: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '15px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflowY: 'auto' },
-  recipeCardItem: { background: 'rgba(30, 41, 59, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' },
-  kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '2px dashed #334155', overflow: 'hidden' },
-  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '82px', height: '82px', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '2px solid rgba(255,255,255,0.25)' },
-  stationLabel: { fontSize: '0.6rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)', textAlign: 'center' },
-  stationItemBadge: { position: 'absolute', top: '-14px', right: '-8px', background: '#334155', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: '2px solid #fbbf24', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' },
-  readyItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#10b981', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', border: '2px solid #fff', boxShadow: '0 0 12px rgba(16, 185, 129, 0.8)', animation: 'popScale 0.4s ease-out' },
-  minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  minigameCard: { background: '#1e1b4b', border: '2px solid #fbbf24', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '380px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' },
-  miniTrackLarge: { width: '100%', height: '14px', background: '#0f172a', borderRadius: '7px', overflow: 'hidden', margin: '15px 0', border: '1px solid rgba(255,255,255,0.2)' },
+  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
+  headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700' },
+  scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)' },
+  activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '12px', gap: '12px' },
+  recipeSidebar: { width: '280px', background: '#111827', border: '1px solid #1f2937', borderRadius: '18px', padding: '18px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflowY: 'auto' },
+  recipeCardItem: { background: 'rgba(30, 41, 59, 0.8)', padding: '14px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)' },
+  kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '18px', border: '2px dashed #334155', overflow: 'hidden' },
+  barrierLine: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: '4px', background: 'rgba(236, 72, 153, 0.35)', transform: 'translateX(-50%)', borderStyle: 'dashed', borderColor: '#ec4899' },
+  barrierLabel: { position: 'absolute', left: '50%', top: '12px', transform: 'translateX(-50%)', background: '#1e1b4b', padding: '6px 14px', borderRadius: '10px', fontSize: '0.8rem', color: '#ec4899', fontWeight: '900', border: '1px solid #ec4899', zIndex: 5 },
+  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '90px', height: '90px', borderRadius: '22px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 30px rgba(0,0,0,0.6)', border: '2.5px solid rgba(255,255,255,0.3)' },
+  stationLabel: { fontSize: '0.7rem', fontWeight: '800', color: '#fff', marginTop: '3px', textShadow: '0 1px 4px rgba(0,0,0,0.9)', textAlign: 'center' },
+  stationItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#334155', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.15rem', border: '2.5px solid #fbbf24', boxShadow: '0 2px 8px rgba(0,0,0,0.5)' },
+  readyItemBadge: { position: 'absolute', top: '-18px', right: '-12px', background: '#10b981', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', border: '2.5px solid #fff', boxShadow: '0 0 16px rgba(16, 185, 129, 0.9)', animation: 'popScale 0.4s ease-out' },
+  minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  minigameCard: { background: '#1e1b4b', border: '2.5px solid #fbbf24', padding: '35px', borderRadius: '28px', textAlign: 'center', width: '420px', boxShadow: '0 25px 50px rgba(0,0,0,0.9)' },
+  congratsCard: { background: '#1e1b4b', border: '2.5px solid #10b981', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '480px', boxShadow: '0 30px 60px rgba(0,0,0,0.9)' },
+  miniTrackLarge: { width: '100%', height: '16px', background: '#0f172a', borderRadius: '8px', overflow: 'hidden', margin: '18px 0', border: '1.5px solid rgba(255,255,255,0.25)' },
   miniFillLarge: { height: '100%', background: 'linear-gradient(90deg, #3b82f6, #10b981)' },
-  tapActionBtn: { width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none', padding: '14px', fontSize: '1.1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
-  tempBarContainer: { position: 'relative', width: '100%', height: '24px', background: '#0f172a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)', margin: '15px 0' },
-  tempGreenZone: { position: 'absolute', left: '40%', width: '25%', height: '100%', background: 'rgba(16, 185, 129, 0.4)', borderLeft: '2px solid #10b981', borderRight: '2px solid #10b981' },
-  tempIndicator: { position: 'absolute', top: 0, width: '6px', height: '100%', background: '#fff', transform: 'translateX(-50%)', boxShadow: '0 0 8px #fff' },
-  playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.85)', padding: '6px 12px', borderRadius: '16px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
-  heldBubble: { position: 'absolute', top: '-30px', background: '#fff', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '2px solid #f59e0b' },
-  playerTag: { fontSize: '0.8rem', fontWeight: '700', color: '#e2e8f0', whiteSpace: 'nowrap' },
-  mobileControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 25px', background: '#111827', borderTop: '1px solid #1f2937' },
-  dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 44px)', gridTemplateRows: 'repeat(2, 44px)', gap: '4px' },
-  dpadBtn: { background: '#334155', border: 'none', borderRadius: '10px', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  actionBigBtn: { width: '68px', height: '68px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', border: 'none', fontSize: '1.8rem', cursor: 'pointer', boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)' }
+  tapActionBtn: { width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.2rem', borderRadius: '14px', cursor: 'pointer', fontWeight: '800' },
+  tempBarContainer: { position: 'relative', width: '100%', height: '28px', background: '#0f172a', borderRadius: '14px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.25)', margin: '18px 0' },
+  tempGreenZone: { position: 'absolute', left: '40%', width: '25%', height: '100%', background: 'rgba(16, 185, 129, 0.45)', borderLeft: '2.5px solid #10b981', borderRight: '2.5px solid #10b981' },
+  tempIndicator: { position: 'absolute', top: 0, width: '8px', height: '100%', background: '#fff', transform: 'translateX(-50%)', boxShadow: '0 0 10px #fff' },
+  playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.9)', padding: '8px 14px', borderRadius: '18px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
+  heldBubble: { position: 'absolute', top: '-34px', background: '#fff', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', boxShadow: '0 4px 12px rgba(0,0,0,0.6)', border: '2.5px solid #f59e0b' },
+  playerTag: { fontSize: '0.9rem', fontWeight: '800', color: '#f1f5f9', whiteSpace: 'nowrap' },
+  mobileControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 28px', background: '#111827', borderTop: '1px solid #1f2937' },
+  dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(2, 48px)', gap: '6px' },
+  dpadBtn: { background: '#334155', border: 'none', borderRadius: '12px', fontSize: '1.35rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  actionBigBtn: { width: '74px', height: '74px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', border: 'none', fontSize: '2rem', cursor: 'pointer', boxShadow: '0 6px 18px rgba(245, 158, 11, 0.5)' }
 };
