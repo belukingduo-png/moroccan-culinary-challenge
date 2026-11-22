@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.8-zellige";
+const APP_VERSION = "v9.9-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.8 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.9 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -283,7 +283,7 @@ export default function App() {
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient) 🍅", 'error', 4000);
+        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient)", 'error', 4000);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -305,7 +305,7 @@ export default function App() {
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient) 🍅", 'error', 4000);
+        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient)", 'error', 4000);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -442,7 +442,11 @@ export default function App() {
       });
 
       if (pickedItem) {
-        if (step && step.id === 'pickup' && pickedItem.type === step.targetItem) {
+        // Robust trimming & comparison of target item vs picked item
+        const cleanedPicked = pickedItem.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
+        const cleanedTarget = step.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim();
+
+        if (step && step.id === 'pickup' && cleanedPicked === cleanedTarget) {
           updateHolding(pickedItem.type, 'raw');
           itemsRef.current = remainingItems;
           setWorldItems(remainingItems);
@@ -669,7 +673,11 @@ export default function App() {
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
-    const foundItem = worldItems.find(i => i.type === currentStepObj.targetItem);
+    const foundItem = worldItems.find(i => {
+      const cleanedI = i.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
+      const cleanedT = currentStepObj.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim();
+      return cleanedI === cleanedT;
+    });
     targetWorldX = foundItem ? foundItem.x : 220;
   } else if (currentStepObj.id === 'cut') {
     targetWorldX = STATIONS.cuttingBoard.x;
@@ -679,7 +687,6 @@ export default function App() {
     targetWorldX = STATIONS.counter.x;
   }
 
-  // Determine if target is currently visible inside viewport bounds
   const viewWidthWorld = viewport.w / zoom;
   const isTargetVisible = targetWorldX >= cameraX && targetWorldX <= cameraX + viewWidthWorld;
   const isTargetToLeft = !isTargetVisible && targetWorldX < cameraX;
@@ -703,12 +710,12 @@ export default function App() {
           pointer-events: none;
         }
         @keyframes floatArrow {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-6px); }
-          100% { transform: translateY(0px); }
+          0% { transform: translateY(0px) scale(1); }
+          50% { transform: translateY(-10px) scale(1.15); }
+          100% { transform: translateY(0px) scale(1); }
         }
         .holding-arrow {
-          animation: floatArrow 1s ease-in-out infinite;
+          animation: floatArrow 0.8s ease-in-out infinite;
         }
         @keyframes chopKnife {
           0% { transform: translateY(0px) rotate(-20deg); }
@@ -743,12 +750,23 @@ export default function App() {
           animation: popCountdown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes goldenPulse {
-          0% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 4px #fbbf24); }
-          50% { transform: scale(1.12) translateX(-45%); filter: drop-shadow(0 0 14px #fbbf24); }
-          100% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 4px #fbbf24); }
+          0% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
+          50% { transform: scale(1.25) translateX(-40%); filter: drop-shadow(0 0 20px #fbbf24) drop-shadow(0 0 40px #f59e0b); }
+          100% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
         }
         .golden-glow-item {
-          animation: goldenPulse 0.8s ease-in-out infinite;
+          animation: goldenPulse 0.9s ease-in-out infinite;
+        }
+        @keyframes compassPulse {
+          0% { transform: translateY(-50%) scale(1); box-shadow: 0 4px 15px rgba(251,191,36,0.3); }
+          50% { transform: translateY(-50%) scale(1.06); box-shadow: 0 6px 25px rgba(251,191,36,0.7); }
+          100% { transform: translateY(-50%) scale(1); box-shadow: 0 4px 15px rgba(251,191,36,0.3); }
+        }
+        .pulsing-compass-left {
+          animation: compassPulse 1s ease-in-out infinite;
+        }
+        .pulsing-compass-right {
+          animation: compassPulse 1s ease-in-out infinite;
         }
       `}</style>
 
@@ -767,7 +785,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.8)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.9)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -846,15 +864,15 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
 
-          {/* Off-Screen Directional Compass (only shown if target is NOT visible on screen) */}
+          {/* Off-Screen Pulsing Compass */}
           {isTargetToLeft && (
-            <div style={styles.compassLeft}>
-              <span style={{ fontSize: '1.4rem' }}>⬅️ 🌟</span> Hors écran (À gauche)
+            <div style={styles.compassLeft} className="pulsing-compass-left">
+              <span style={{ fontSize: '1.8rem' }}>⬅️ 🌟</span> Hors écran (À gauche)
             </div>
           )}
           {isTargetToRight && (
-            <div style={styles.compassRight}>
-              Hors écran (À droite) <span style={{ fontSize: '1.4rem' }}>🌟 ➡️</span>
+            <div style={styles.compassRight} className="pulsing-compass-right">
+              Hors écran (À droite) <span style={{ fontSize: '1.8rem' }}>🌟 ➡️</span>
             </div>
           )}
 
@@ -1021,10 +1039,10 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Station on Platform (with golden glow & down arrow if visible target) */}
+            {/* Cutting Board Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '18px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
                 </div>
               )}
@@ -1048,7 +1066,7 @@ export default function App() {
             {/* Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '18px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
                 </div>
               )}
@@ -1067,17 +1085,19 @@ export default function App() {
             {/* Serving Counter Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'serve' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '12px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
                 </div>
               )}
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients (with golden glow and down arrow when visible on screen) */}
+            {/* World Ingredients (with huge pulsing glow and large down arrow when visible) */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
-              const isTargetItem = currentStepObj.id === 'pickup' && item.type === currentStepObj.targetItem;
+              const cleanedItem = item.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
+              const cleanedTarget = currentStepObj.targetItem ? currentStepObj.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim() : '';
+              const isTargetItem = currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget;
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
@@ -1091,7 +1111,7 @@ export default function App() {
                   }}
                 >
                   {isItemVisibleOnScreen && (
-                    <div className="holding-arrow" style={{ position: 'absolute', top: '-32px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                    <div className="holding-arrow" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 12px #f59e0b' }}>
                       ▼
                     </div>
                   )}
@@ -1099,7 +1119,7 @@ export default function App() {
                     className={isTargetItem ? "golden-glow-item" : ""}
                     style={{
                       fontSize: '1.8rem',
-                      filter: isTargetItem ? 'drop-shadow(0 0 12px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))'
+                      filter: isTargetItem ? 'drop-shadow(0 0 16px #fbbf24) drop-shadow(0 0 30px #f59e0b)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))'
                     }}
                   >
                     {item.type}
@@ -1172,8 +1192,8 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  compassLeft: { position: 'fixed', left: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid #fbbf24', color: '#fbbf24', padding: '10px 16px', borderRadius: '12px', fontWeight: '900', zIndex: 50, boxShadow: '0 4px 15px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', gap: '8px' },
-  compassRight: { position: 'fixed', right: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid #fbbf24', color: '#fbbf24', padding: '10px 16px', borderRadius: '12px', fontWeight: '900', zIndex: 50, boxShadow: '0 4px 15px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', gap: '8px' },
+  compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
+  compassRight: { position: 'fixed', right: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
   touchDpad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
   touchActionPad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
