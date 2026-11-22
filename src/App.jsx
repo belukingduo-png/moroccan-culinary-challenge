@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v4.4";
+const APP_VERSION = "v4.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -66,7 +66,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.4 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.5 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
@@ -263,7 +263,7 @@ export default function App() {
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
-        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToPrep });
+        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToPrep, isWorking: true });
 
         setMinigameData({
           stationId: nearby.id,
@@ -283,7 +283,7 @@ export default function App() {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
-        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
+        syncStationUpdate(nearby.id, { ...stState, readyItem: null, isCooking: false });
         addLog(`${playerEmoji} ${playerName} a récupéré le plat cuit 🔥`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem === activeTicket.requiredPrep && !stState.progress && !stState.readyItem) {
@@ -300,7 +300,7 @@ export default function App() {
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
-        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToCook });
+        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToCook, isCooking: true });
 
         setTempMinigame({
           stationId: nearby.id,
@@ -311,7 +311,6 @@ export default function App() {
       }
     }
     else if (nearby.type === 'pass') {
-      // STRICT CHECK: Cannot pass raw ingredients! Must be prepped (🥗, 🍖, 🌿) or cooked.
       if (currentItem === activeTicket.requiredItem) {
         addLog(`❌ ERREUR PASSE-PLATS : Vous devez d'abord découper l'ingrédient sur la planche 🔪 !`);
         syncLiveAchievement(`❌ Découpez l'ingrédient d'abord !`, `Chef Gauche : Planche 🔪`);
@@ -338,7 +337,6 @@ export default function App() {
         setHeldItem('');
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
         
-        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
         const newScore = scoreRef.current + 5;
         const newContrib = contribRef.current + 5;
         scoreRef.current = newScore;
@@ -347,9 +345,10 @@ export default function App() {
         setMyContributions(newContrib);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
 
+        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
         syncLiveAchievement(
           `✅ Posé sur le Passe-Plats 🪟 (+5 pts)`,
-          `Chef Droit : Cuire dans ${correctPotName} 🔥`
+          `Chef Droit : Prendre l'ingrédient du Passe-Plats 🪟 puis cuire dans ${correctPotName} 🔥`
         );
 
         addLog(`🪟 ${playerName} a passé ${dropped} (+5 pts) !`);
@@ -424,7 +423,7 @@ export default function App() {
 
     if (isSuccess) {
       const result = item === '🌿' ? '🫖' : '🍲';
-      syncStationUpdate(stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
+      syncStationUpdate(stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false, isCooking: false });
       
       const newScore = scoreRef.current + 5;
       const newContrib = contribRef.current + 5;
@@ -441,7 +440,7 @@ export default function App() {
       addLog(`🔥 Cuisson réussie (+5 pts) ➔ ${result}`);
       if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
     } else {
-      syncStationUpdate(stationId, { progress: 0, label: '', currentItem: null, readyItem: null, fire: false });
+      syncStationUpdate(stationId, { progress: 0, label: '', currentItem: null, readyItem: null, fire: false, isCooking: false });
       const penaltyScore = Math.max(0, scoreRef.current - 5);
       setScore(penaltyScore);
       scoreRef.current = penaltyScore;
@@ -458,7 +457,7 @@ export default function App() {
       const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🌿': '🌿' };
       const result = choppedMap[minigameData.item] || '🥗';
       
-      syncStationUpdate(minigameData.stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
+      syncStationUpdate(minigameData.stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false, isWorking: false });
       
       const newScore = scoreRef.current + 5;
       const newContrib = contribRef.current + 5;
@@ -567,7 +566,7 @@ export default function App() {
       }
     });
 
-    const lbRef = ref(db, 'leaderboard_v44');
+    const lbRef = ref(db, 'leaderboard_v45');
     const unsubLb = onValue(lbRef, (snapshot) => {
       const lbData = snapshot.val();
       if (lbData) {
@@ -595,7 +594,7 @@ export default function App() {
         clearInterval(interval);
         if (isHost && db && roomCode) {
           update(ref(db, `rooms/${roomCode}`), { status: 'gameover' });
-          push(ref(db, 'leaderboard_v44'), {
+          push(ref(db, 'leaderboard_v45'), {
             room: roomCode,
             score: scoreRef.current,
             date: new Date().toLocaleDateString()
@@ -742,8 +741,13 @@ export default function App() {
         }
         @keyframes knifeChopping {
           0% { transform: rotate(0deg) translateY(0); }
-          50% { transform: rotate(-35deg) translateY(-10px); }
+          50% { transform: rotate(-35deg) translateY(-8px); }
           100% { transform: rotate(0deg) translateY(0); }
+        }
+        @keyframes potCookingGlow {
+          0% { transform: scale(1); filter: drop-shadow(0 0 4px #f59e0b); }
+          50% { transform: scale(1.08); filter: drop-shadow(0 0 16px #f59e0b) brightness(1.2); }
+          100% { transform: scale(1); filter: drop-shadow(0 0 4px #f59e0b); }
         }
         @keyframes fireAlarm {
           0% { transform: scale(1); filter: brightness(1); }
@@ -762,7 +766,8 @@ export default function App() {
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .pulse-btn { animation: pulseGreen 2s infinite; }
-        .knife-anim { animation: knifeChopping 0.22s ease-in-out infinite; }
+        .knife-anim { animation: knifeChopping 0.2s ease-in-out infinite; }
+        .cooking-glow-anim { animation: potCookingGlow 0.6s ease-in-out infinite; }
         .fire-anim { animation: fireAlarm 0.5s ease-in-out infinite; }
         .achievement-card { animation: achievementSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .falling-emoji {
@@ -916,7 +921,7 @@ export default function App() {
                 <ul style={styles.guideList}>
                   <li><strong>Chef Gauche :</strong> Prends les ingrédients (caisses) et découpe sur la planche 🔪.</li>
                   <li><strong>Passe-Plats :</strong> Utilisez 🪟 pour passer les ingrédients préparés !</li>
-                  <li><strong>Chef Droit :</strong> Cuit dans les pots 🍲/🫖 et sert au comptoir 🛎️.</li>
+                  <li><strong>Chef Droit :</strong> Récupérez du passe-plats, cuisez dans les pots 🍲/🫖 et servez au comptoir 🛎️.</li>
                 </ul>
               </div>
 
@@ -1001,9 +1006,13 @@ export default function App() {
 
               {STATIONS.map((st) => {
                 const stState = stationStates[st.id] || {};
-                const isWorking = stState.progress > 0;
+                const isWorking = stState.isWorking || stState.progress > 0;
+                const isCooking = stState.isCooking;
                 const isReady = !!stState.readyItem;
                 const hasFire = !!stState.fire;
+
+                const isChoppingBoard = st.type === 'board';
+                const isStove = st.type === 'stove';
 
                 return (
                   <div
@@ -1013,10 +1022,10 @@ export default function App() {
                       left: `${st.x}%`,
                       top: `${st.y}%`,
                       background: hasFire ? '#991b1b' : st.color,
-                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.3)'))
+                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking || isCooking ? '#fbbf24' : 'rgba(255,255,255,0.3)'))
                     }}
                   >
-                    <div className={hasFire ? 'fire-anim' : (st.type === 'board' && isWorking ? 'knife-anim' : '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                    <div className={hasFire ? 'fire-anim' : (isChoppingBoard && isWorking ? 'knife-anim' : (isStove && isCooking ? 'cooking-glow-anim' : ''))} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <span style={{ fontSize: '2.4rem' }}>
                         {hasFire ? '🔥' : st.icon}
                       </span>
