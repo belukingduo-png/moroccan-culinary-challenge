@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.0";
+const APP_VERSION = "v9.2-achievement";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -49,33 +49,33 @@ const STATIONS = {
   counter: { x: 1950, offsetFromGround: 180 }
 };
 
-const RECIPES = [
-  {
-    name: "Tajine à la Tomate",
-    ingredient: '🍅',
-    ingredientLabel: "la tomate 🍅",
-    itemId: 'item_1'
-  },
-  {
-    name: "Couscous à l'Ail",
-    ingredient: '🧄',
-    ingredientLabel: "l'ail 🧄",
-    itemId: 'item_2'
-  },
-  {
-    name: "Pain Grillé Royal",
-    ingredient: '🥖',
-    ingredientLabel: "la baguette 🥖",
-    itemId: 'item_3'
-  }
-];
-
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 15, w: 34, h: 45 }],
   run: [{ x: 35, y: 110, w: 36, h: 45 }, { x: 74, y: 110, w: 36, h: 45 }],
   jump: [{ x: 28, y: 155, w: 42, h: 42 }],
   fall: [{ x: 35, y: 15, w: 34, h: 45 }]
 };
+
+const RECIPES_POOL = [
+  {
+    name: "Tajine à la Tomate",
+    steps: [
+      { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅' },
+      { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut' },
+      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook' },
+      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve' }
+    ]
+  },
+  {
+    name: "Couscous à l'Ail",
+    steps: [
+      { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄' },
+      { id: 'cut', label: 'Couper l\'Ail 🔪', targetMinigame: 'cut' },
+      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook' },
+      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve' }
+    ]
+  }
+];
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0, isGhost = false }) {
   const frames = SPRITE_STATES[anim] || SPRITE_STATES.idle;
@@ -132,13 +132,17 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v9.0 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.2 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  const [recipeIndex, setRecipeIndex] = useState(0);
-  const [questStep, setQuestStep] = useState(0);
-  const [bannerStatus, setBannerStatus] = useState('neutral');
-  const [bannerFading, setBannerFading] = useState(false);
+  // Achievement / Quest System State
+  const [currentRecipe, setCurrentRecipe] = useState(RECIPES_POOL[0]);
+  const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const [achievementBanner, setAchievementBanner] = useState({
+    visible: false,
+    text: '',
+    status: 'info'
+  });
 
   const [activeMinigame, setActiveMinigame] = useState(null);
   const [sliderPos, setSliderPos] = useState(0);
@@ -167,15 +171,8 @@ export default function App() {
   const itemsRef = useRef(INITIAL_ITEMS);
   const stationRef = useRef(stationState);
 
-  // Bulletproof Ref trackers for game state
-  const questStepRef = useRef(0);
   const holdingItemRef = useRef(null);
   const holdingStateRef = useRef('raw');
-
-  const updateQuestStep = (step) => {
-    questStepRef.current = step;
-    setQuestStep(step);
-  };
 
   const updateHolding = (item, state) => {
     holdingItemRef.current = item;
@@ -184,7 +181,12 @@ export default function App() {
     setHoldingState(state);
   };
 
-  const currentRecipe = RECIPES[recipeIndex % RECIPES.length];
+  const triggerAchievement = (text, status = 'success', duration = 3000) => {
+    setAchievementBanner({ visible: true, text, status });
+    setTimeout(() => {
+      setAchievementBanner(prev => ({ ...prev, visible: false }));
+    }, duration);
+  };
 
   const backgroundParticles = useMemo(() => {
     return [...Array(15)].map((_, i) => ({
@@ -219,7 +221,10 @@ export default function App() {
       const t1 = setTimeout(() => setCountdown(2), 1000);
       const t2 = setTimeout(() => setCountdown(1), 2000);
       const t3 = setTimeout(() => setCountdown('GO!'), 3000);
-      const t4 = setTimeout(() => setCountdown(null), 3700);
+      const t4 = setTimeout(() => {
+        setCountdown(null);
+        triggerAchievement(`Objectif : ${currentRecipe.steps[0].label}`, 'info', 4000);
+      }, 3700);
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
@@ -252,54 +257,43 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeMinigame]);
 
-  const triggerQuestFeedback = (status, nextStepVal = null) => {
-    setBannerStatus(status);
-    setTimeout(() => {
-      setBannerFading(true);
-      setTimeout(() => {
-        if (nextStepVal !== null) {
-          updateQuestStep(nextStepVal);
-        }
-        setBannerStatus('neutral');
-        setBannerFading(false);
-      }, 250);
-    }, 600);
-  };
-
   const resolveMinigame = () => {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
-    const isGood = posVal >= 35 && posVal <= 65;
+    const isGood = posVal >= 30 && posVal <= 70;
+    const step = currentRecipe.steps[activeStepIndex];
 
     if (activeMinigame.type === 'cut') {
-      if (isGood) {
+      if (isGood && step && step.id === 'cut') {
         setScore(prev => prev + 50);
+        triggerAchievement("✅ Super coupe ! Prochaine étape : Cuire dans le pot 🍲", 'success', 3500);
         updateHolding(activeMinigame.itemType, 'chopped');
         const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        setActiveStepIndex(prev => prev + 1);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', 2); // Step 2: Cooking
       } else {
-        setScore(prev => Math.max(0, prev - 20));
-        setBannerStatus('error');
-        setTimeout(() => setBannerStatus('neutral'), 700);
+        setScore(prev => Math.max(0, prev - 15));
+        triggerAchievement("❌ Coupe ratée ! -15 pts", 'error', 3000);
+        setActiveMinigame(null);
       }
     } else if (activeMinigame.type === 'cook') {
-      if (isGood) {
+      if (isGood && step && step.id === 'cook') {
         setScore(prev => prev + 50);
+        triggerAchievement("✅ Cuisson parfaite ! Prochaine étape : Servir au comptoir 🛎️", 'success', 3500);
         updateHolding('🍲', 'cooked');
         const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        setActiveStepIndex(prev => prev + 1);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', 3); // Step 3: Serving
       } else {
-        setScore(prev => Math.max(0, prev - 20));
-        setBannerStatus('error');
-        setTimeout(() => setBannerStatus('neutral'), 700);
+        setScore(prev => Math.max(0, prev - 15));
+        triggerAchievement("❌ Température incorrecte ! -15 pts", 'error', 3000);
+        setActiveMinigame(null);
       }
     }
   };
@@ -346,86 +340,96 @@ export default function App() {
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
-    const curStep = questStepRef.current;
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
+    const step = currentRecipe.steps[activeStepIndex];
 
-    // 1. Serving Counter (Step 3)
+    // 1. Serving Counter
     if (Math.abs(px - STATIONS.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
-      if (curHolding && curState === 'cooked' && curStep === 3) {
+      if (curHolding && curState === 'cooked' && step && step.id === 'serve') {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         updateHolding(null, 'raw');
-        setScore(prev => prev + 100);
+        setScore(prev => prev + 250);
+        triggerAchievement("🎉 Plat servi avec succès ! +250 pts Bonus !", 'success', 4000);
+
+        const newRecipe = RECIPES_POOL[Math.floor(Math.random() * RECIPES_POOL.length)];
+        setTimeout(() => {
+          setCurrentRecipe(newRecipe);
+          setActiveStepIndex(0);
+          triggerAchievement(`Nouvelle Recette : ${newRecipe.name} - Objectif : ${newRecipe.steps[0].label}`, 'info', 4000);
+        }, 1500);
+
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setRecipeIndex(prev => prev + 1);
-        setWorldItems(INITIAL_ITEMS);
-        itemsRef.current = INITIAL_ITEMS;
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), INITIAL_ITEMS);
-        triggerQuestFeedback('success', 0);
-      } else {
-        triggerQuestFeedback('error');
+      } else if (step && step.id === 'serve') {
+        triggerAchievement("⚠️ Le plat n'est pas encore cuit ou prêt !", 'error', 2500);
       }
       return;
     }
 
-    // 2. Cutting Board Station (Step 1)
+    // 2. Cutting Board Station
     if (Math.abs(px - STATIONS.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
-      if (curHolding === currentRecipe.ingredient && curState === 'raw' && curStep === 1) {
-        const itemType = curHolding;
-        updateHolding(null, 'raw');
-        const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setActiveMinigame({ type: 'cut', itemType });
-      } else {
-        triggerQuestFeedback('error');
+      if (curHolding && curState === 'raw') {
+        if (step && step.id === 'cut') {
+          const itemType = curHolding;
+          updateHolding(null, 'raw');
+          const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+          setActiveMinigame({ type: 'cut', itemType });
+        } else {
+          setScore(prev => Math.max(0, prev - 15));
+          triggerAchievement("❌ Ce n'est pas la bonne étape pour couper ! -15 pts", 'error', 3000);
+        }
       }
       return;
     }
 
-    // 3. Pot Station (Step 2)
+    // 3. Pot Station
     if (Math.abs(px - STATIONS.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
-      if (curHolding === currentRecipe.ingredient && curState === 'chopped' && curStep === 2) {
-        const itemType = curHolding;
-        updateHolding(null, 'raw');
-        const updatedStations = { ...stationRef.current, potCooking: true };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setActiveMinigame({ type: 'cook', itemType });
-      } else {
-        triggerQuestFeedback('error');
+      if (curHolding && curState === 'chopped') {
+        if (step && step.id === 'cook') {
+          const itemType = curHolding;
+          updateHolding(null, 'raw');
+          const updatedStations = { ...stationRef.current, potCooking: true };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+          setActiveMinigame({ type: 'cook', itemType });
+        } else {
+          setScore(prev => Math.max(0, prev - 15));
+          triggerAchievement("❌ Ce n'est pas la bonne étape pour cuisiner ! -15 pts", 'error', 3000);
+        }
       }
       return;
     }
 
-    // 4. Pickup from World Items (Step 0) - Robust X-range check
-    if (!curHolding && curStep === 0) {
-      let pickedType = null;
+    // 4. World Pickup
+    if (!curHolding) {
+      let pickedItem = null;
       const remainingItems = itemsRef.current.filter(item => {
         const xDist = Math.abs(px - item.x);
-        if (xDist < 80 && !pickedType) {
-          if (item.type === currentRecipe.ingredient) {
-            pickedType = item.type;
-            return false;
-          } else {
-            triggerQuestFeedback('error');
-          }
+        if (xDist < 80 && !pickedItem) {
+          pickedItem = item;
+          return false;
         }
         return true;
       });
 
-      if (pickedType) {
-        updateHolding(pickedType, 'raw');
-        itemsRef.current = remainingItems;
-        setWorldItems(remainingItems);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
-        
-        // Instantly forces step advancement and green success banner
-        triggerQuestFeedback('success', 1);
+      if (pickedItem) {
+        if (step && step.id === 'pickup' && pickedItem.type === step.targetItem) {
+          updateHolding(pickedItem.type, 'raw');
+          itemsRef.current = remainingItems;
+          setWorldItems(remainingItems);
+          triggerAchievement("✅ Ingrédient correct ! Prochaine étape : Couper sur la planche 🔪", 'success', 3500);
+          setActiveStepIndex(prev => prev + 1);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
+        } else {
+          setScore(prev => Math.max(0, prev - 20));
+          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem.type}) ! -20 pts`, 'error', 3000);
+        }
       }
     }
   };
@@ -463,7 +467,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isHost, activeMinigame, countdown, currentRecipe]);
+  }, [gameState, isHost, activeMinigame, countdown]);
 
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
@@ -638,58 +642,6 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  const getQuestInfo = () => {
-    if (questStep === 0) {
-      const targetItem = worldItems.find(i => i.type === currentRecipe.ingredient) || INITIAL_ITEMS.find(i => i.type === currentRecipe.ingredient);
-      const targetY = targetItem ? (targetItem.y === 0 ? floorY - 65 : floorY - targetItem.y - 68) : floorY - 180;
-      return {
-        text: `1. Prends ${currentRecipe.ingredientLabel} (ESPACE)`,
-        arrowX: targetItem ? targetItem.x : 220,
-        arrowY: targetY
-      };
-    }
-    if (questStep === 1) {
-      return {
-        text: `2. Coupe ${currentRecipe.ingredientLabel} sur la planche 🔪 (ESPACE)`,
-        arrowX: STATIONS.cuttingBoard.x,
-        arrowY: cbTop - 42
-      };
-    }
-    if (questStep === 2) {
-      return {
-        text: `3. Fais cuire dans la marmite 🍲 (ESPACE)`,
-        arrowX: STATIONS.pot.x,
-        arrowY: potTop - 52
-      };
-    }
-    return {
-      text: `4. Sers le plat (${currentRecipe.name}) au comptoir 🛎️ (ESPACE)`,
-      arrowX: STATIONS.counter.x,
-      arrowY: counterTop - 42
-    };
-  };
-
-  const questInfo = getQuestInfo();
-
-  const getQuestBannerStyle = () => {
-    let bg = 'rgba(15, 23, 42, 0.92)';
-    let border = '#fbbf24';
-    if (bannerStatus === 'success') {
-      bg = 'rgba(16, 185, 129, 0.95)';
-      border = '#34d399';
-    } else if (bannerStatus === 'error') {
-      bg = 'rgba(239, 68, 68, 0.95)';
-      border = '#f87171';
-    }
-    return {
-      ...styles.questHeader,
-      background: bg,
-      borderColor: border,
-      opacity: bannerFading ? 0 : 1,
-      transform: bannerFading ? 'translate(-50%, -14px)' : 'translate(-50%, 0px)'
-    };
-  };
-
   return (
     <div style={styles.appContainer}>
       <style>{`
@@ -714,15 +666,6 @@ export default function App() {
         }
         .holding-arrow {
           animation: floatArrow 1s ease-in-out infinite;
-        }
-        @keyframes goldenBounce {
-          0% { transform: translate(-50%, 0px) scale(1); }
-          50% { transform: translate(-50%, -12px) scale(1.15); }
-          100% { transform: translate(-50%, 0px) scale(1); }
-        }
-        .golden-arrow {
-          animation: goldenBounce 0.8s ease-in-out infinite;
-          filter: drop-shadow(0 0 12px #fbbf24) drop-shadow(0 0 24px #f59e0b);
         }
         @keyframes chopKnife {
           0% { transform: translateY(0px) rotate(-20deg); }
@@ -773,7 +716,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.2 Achievement)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -848,18 +791,65 @@ export default function App() {
           <div style={styles.hudBar}>
             <span>⭐ Score: {score}</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
-            <span>🎒 En main: {holdingItem || 'Aucun'}</span>
+            <span>🎒 En main: {holdingItem ? `${holdingItem} (${holdingState})` : 'Aucun'}</span>
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
 
-          {/* Dynamic French Instruction / Achievement Banner */}
-          <div style={getQuestBannerStyle()}>
-            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#fbbf24', marginBottom: '2px' }}>
-              Recette : {currentRecipe.name}
+          {/* Achievement Popup Banner */}
+          {achievementBanner.visible && (
+            <div style={{
+              position: 'fixed',
+              top: '80px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              background: achievementBanner.status === 'success' ? 'rgba(16, 185, 129, 0.95)' :
+                          achievementBanner.status === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)',
+              color: '#fff',
+              padding: '12px 24px',
+              borderRadius: '16px',
+              fontSize: '1.1rem',
+              fontWeight: '900',
+              zIndex: 100,
+              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              animation: 'popCountdown 0.3s ease-out'
+            }}>
+              {achievementBanner.text}
             </div>
-            <div style={{ fontSize: '1.1rem', fontWeight: '900' }}>
-              {bannerStatus === 'success' ? '✅ Bien joué !' : bannerStatus === 'error' ? '❌ Mauvaise action ! (-20 pts)' : questInfo.text}
+          )}
+
+          {/* Quest Tracker Widget */}
+          <div style={{
+            position: 'fixed',
+            top: '70px',
+            right: '20px',
+            background: 'rgba(15, 23, 42, 0.85)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            padding: '14px 18px',
+            borderRadius: '14px',
+            zIndex: 50,
+            width: '270px'
+          }}>
+            <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
+              📜 {currentRecipe.name}
             </div>
+            {currentRecipe.steps.map((step, idx) => {
+              const isCurrent = idx === activeStepIndex;
+              const isDone = idx < activeStepIndex;
+              return (
+                <div key={idx} style={{
+                  fontSize: '0.85rem',
+                  fontWeight: '700',
+                  color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b',
+                  margin: '4px 0',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span>{isDone ? '✅' : isCurrent ? '➡️' : '⏳'}</span>
+                  <span style={{ textDecoration: isDone ? 'line-through' : 'none' }}>{step.label}</span>
+                </div>
+              );
+            })}
           </div>
 
           {/* On-Screen Mobile Touch Controls */}
@@ -904,7 +894,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Fully Opaque 3 - 2 - 1 Countdown Overlay */}
+          {/* Countdown Overlay */}
           {countdown !== null && (
             <div style={styles.countdownOverlay}>
               <div key={countdown} className="countdown-num" style={styles.countdownText}>
@@ -913,15 +903,15 @@ export default function App() {
             </div>
           )}
 
-          {/* Cutting & Cooking Minigame Timing Overlay */}
+          {/* Cutting & Cooking Minigame Overlay */}
           {activeMinigame && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameBox}>
                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
-                  {activeMinigame.type === 'cut' ? '🔪 ANGLE DE COUPE PARFAIT !' : '🔥 CONTRÔLE DE TEMPÉRATURE !'}
+                  {activeMinigame.type === 'cut' ? '🔪 COUPE !' : '🔥 CUISSON !'}
                 </div>
                 <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>
-                  Appuie sur <strong>ESPACE</strong> ou le bouton vert dans la zone verte !
+                  Appuie sur <strong>ESPACE</strong> dans la zone verte !
                 </p>
 
                 <div style={styles.sliderTrack}>
@@ -967,21 +957,6 @@ export default function App() {
               );
             })}
 
-            {/* Glowing Golden Arrow pointing to current task target */}
-            <div
-              className="golden-arrow"
-              style={{
-                position: 'absolute',
-                left: `${questInfo.arrowX}px`,
-                top: `${questInfo.arrowY}px`,
-                fontSize: '2.2rem',
-                zIndex: 35,
-                pointerEvents: 'none'
-              }}
-            >
-              ⬇️
-            </div>
-
             {/* Cutting Board Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
@@ -1001,7 +976,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Single Cooking Pot Station on Platform */}
+            {/* Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>
@@ -1046,7 +1021,7 @@ export default function App() {
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
               {holdingItem && (
                 <div className="holding-arrow" style={styles.holdingIndicator}>
-                  ▼ {holdingItem}
+                  ▼ {holdingItem} ({holdingState})
                 </div>
               )}
               <div style={{ ...styles.tag, border: '1.5px solid #fbbf24' }}>{playerName}</div>
@@ -1104,7 +1079,6 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  questHeader: { position: 'fixed', top: '68px', left: '50%', zIndex: 55, padding: '12px 28px', borderRadius: '16px', border: '3px solid #fbbf24', boxShadow: '0 10px 30px rgba(0,0,0,0.45)', textAlign: 'center', transition: 'all 0.3s ease', minWidth: '340px' },
   touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
   touchDpad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
   touchActionPad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
@@ -1114,13 +1088,13 @@ const styles = {
   minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90 },
   minigameBox: { background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '24px', padding: '32px 40px', width: '90%', maxWidth: '460px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' },
   sliderTrack: { width: '100%', height: '32px', background: '#0f172a', borderRadius: '16px', border: '2px solid rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden', marginBottom: '20px' },
-  sweetSpot: { position: 'absolute', left: '35%', width: '30%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
+  sweetSpot: { position: 'absolute', left: '30%', width: '40%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
   sliderCursor: { position: 'absolute', top: '-2px', transform: 'translateX(-50%)', fontSize: '1.6rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' },
   minigameActionBtn: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '12px 24px', fontSize: '1.1rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
-  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '28px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 12px, #78350f 12px, #78350f 24px)', borderTop: '4px solid #22c55e' },
+  ground: { position: 'absolute', bottom: '0', left: '0', width: '100%', height: '28px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 12px, #78350f 12px, #78350f 24px)', borderTop: '4px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
   holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
