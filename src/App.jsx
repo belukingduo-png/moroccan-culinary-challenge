@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.2-zellige";
+const APP_VERSION = "v11.3-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -158,6 +158,7 @@ export default function App() {
   const [currentWorldIndex, setCurrentWorldIndex] = useState(0);
   const worldConfig = WORLDS_CONFIG[currentWorldIndex];
 
+  // Persistent world items (they remain visible on platforms)
   const [worldItems, setWorldItems] = useState(worldConfig.items);
   const [stationState, setStationState] = useState({
     cuttingBoardItem: null,
@@ -170,7 +171,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.2 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.3 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Portal Transition State
@@ -485,10 +486,10 @@ export default function App() {
       return;
     }
 
-    // 4. World Pickup
+    // 4. World Pickup (Persistent items - they remain visible on platforms)
     if (!curHolding) {
       let pickedItem = null;
-      const remainingItems = itemsRef.current.filter(item => {
+      itemsRef.current.forEach(item => {
         const xDist = Math.abs(px - item.x);
         const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
@@ -496,9 +497,7 @@ export default function App() {
 
         if (xDist < 60 && yDist < 60 && !pickedItem) {
           pickedItem = item;
-          return false;
         }
-        return true;
       });
 
       if (pickedItem) {
@@ -507,11 +506,8 @@ export default function App() {
 
         if (step && step.id === 'pickup' && cleanedPicked === cleanedTarget) {
           updateHolding(pickedItem.type, 'raw');
-          itemsRef.current = remainingItems;
-          setWorldItems(remainingItems);
           triggerAchievement("✅ Ingrédient correct ! Prochaine étape : Couper sur la planche 🔪", 'success', 3500);
           updateActiveStep(activeStepIndexRef.current + 1);
-          if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         } else {
           setScore(prev => Math.max(0, prev - 20));
           triggerAchievement(`❌ Mauvais ingrédient (${pickedItem?.type || ''}) ! -20 pts (Il faut : ${step?.targetItem || ''})`, 'error', 3500);
@@ -654,10 +650,6 @@ export default function App() {
       if (data) {
         setGameState(data.status || 'waiting');
         setPlayers(data.players || {});
-        if (data.items) {
-          setWorldItems(data.items);
-          itemsRef.current = data.items;
-        }
         if (data.stations) {
           setStationState(data.stations);
           stationRef.current = data.stations;
@@ -684,7 +676,6 @@ export default function App() {
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
-        items: WORLD_1_PLATFORMS,
         stations: { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: 0 },
         logs: [`👑 Salon ${code} ouvert`]
       });
@@ -853,7 +844,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.2)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.3)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1197,9 +1188,10 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients */}
+            {/* Persistent World Ingredients (Always visible on platforms) */}
             {worldItems.map((item, idx) => {
-              const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
+              const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
+              const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
               const cleanedItem = (item?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
               const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
               const isTargetItem = currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget;
