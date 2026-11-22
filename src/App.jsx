@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v2.0";
+const APP_VERSION = "v3.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,20 +16,22 @@ try {
   console.warn("Firebase error:", e);
 }
 
-// Stations Setup with larger layout sizing and slots for current item
+// Stations Setup including Central Pass-Through, Prep Boards, Cook Stoves, and Fire Extinguisher
 const STATIONS = [
-  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 15, y: 20, color: '#ef4444' },
-  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 15, y: 40, color: '#f97316' },
-  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 15, y: 60, color: '#eab308' },
-  { id: 'crate_garlic', icon: '🧄', type: 'crate', item: '🧄', label: 'Caisse Ail', x: 15, y: 80, color: '#a855f7' },
+  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 20, color: '#ef4444' },
+  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 40, color: '#f97316' },
+  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 60, color: '#eab308' },
+  { id: 'crate_garlic', icon: '🧄', type: 'crate', item: '🧄', label: 'Caisse Ail', x: 12, y: 80, color: '#a855f7' },
 
-  { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe 1', x: 75, y: 25, color: '#3b82f6' },
-  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe 2', x: 75, y: 45, color: '#3b82f6' },
+  { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe Prep 1', x: 35, y: 25, color: '#3b82f6' },
+  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe Prep 2', x: 35, y: 50, color: '#3b82f6' },
 
-  { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine 1', x: 50, y: 75, color: '#f59e0b' },
-  { id: 'stove_2', icon: '🍲', type: 'stove', label: 'Tagine 2', x: 75, y: 75, color: '#f59e0b' },
+  { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine Cuisson 1', x: 65, y: 25, color: '#f59e0b' },
+  { id: 'stove_2', icon: '🫖', type: 'stove', label: 'Tagine Cuisson 2', x: 65, y: 50, color: '#f59e0b' },
 
-  { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir', x: 90, y: 50, color: '#10b981' },
+  { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 82, color: '#ec4899' },
+  { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 20, color: '#64748b' },
+  { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981' },
 ];
 
 const EMOJIS = [
@@ -37,11 +39,13 @@ const EMOJIS = [
   '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'
 ];
 
-const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🧀'];
+const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
+// Dynamic Moroccan Recipes with multi-step pipelines
 const RECIPES = [
-  { title: "Salade Mechouia 🌶️", items: ["🌶️", "🍅"], cooked: "🍲" },
-  { title: "Tagine de Poulet 🍗", items: ["🍗", "🧄", "🍅"], cooked: "🍲" }
+  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredPrep: "🥗", requiredCook: "🍲", points: 15 },
+  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredPrep: "🍖", requiredCook: "🍲", points: 20 },
+  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredPrep: "🌿", requiredCook: "🫖", points: 15 }
 ];
 
 export default function App() {
@@ -56,19 +60,22 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(3);
   const [endTime, setEndTime] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(60);
+  const [timeLeft, setTimeLeft] = useState(120); // Extended to 2 minutes
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Prête (v3.0)']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
   const [pos, setPos] = useState({ x: 50, y: 50 });
   const [heldItem, setHeldItem] = useState('');
-  const [myRecipe, setMyRecipe] = useState(RECIPES[0]);
   const [myContributions, setMyContributions] = useState(0);
 
-  // Station specific state: { [stationId]: { progress, label, currentItem, readyItem } }
+  // Active Orders Ticket Queue
+  const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
+
+  // Station specific state: { [stationId]: { progress, label, currentItem, readyItem, activeGame, fire } }
   const [stationStates, setStationStates] = useState({});
+  const [minigameData, setMinigameData] = useState(null); // { stationId, targetKey, prompt }
 
   const posRef = useRef({ x: 50, y: 50 });
   const heldRef = useRef('');
@@ -103,9 +110,9 @@ export default function App() {
   };
 
   const movePlayer = (dx, dy) => {
-    if (gameState !== 'playing' || isHost) return;
-    const nextX = Math.max(8, Math.min(95, posRef.current.x + dx));
-    const nextY = Math.max(12, Math.min(90, posRef.current.y + dy));
+    if (gameState !== 'playing' || isHost || minigameData) return;
+    const nextX = Math.max(6, Math.min(95, posRef.current.x + dx));
+    const nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
     const updated = { x: nextX, y: nextY };
     posRef.current = updated;
     setPos(updated);
@@ -121,7 +128,35 @@ export default function App() {
     let currentItem = heldRef.current;
     const stState = stationStates[nearby.id] || {};
 
-    // 1. Crate: Take ingredient if hands are empty
+    // 0. Grease Fire Extinguishing
+    if (stState.fire) {
+      if (currentItem === '🧯' || nearby.type === 'extinguisher') {
+        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], fire: false, progress: 0 } }));
+        addLog(`🧯 ${playerName} a éteint le feu de cuisine avec succès !`);
+      } else if (nearby.type === 'extinguisher' && currentItem === '') {
+        heldRef.current = '🧯';
+        setHeldItem('🧯');
+        addLog(`🧯 ${playerName} a pris l'extincteur !`);
+      }
+      return;
+    }
+
+    if (nearby.type === 'extinguisher') {
+      if (currentItem === '') {
+        heldRef.current = '🧯';
+        setHeldItem('🧯');
+        addLog(`🧯 ${playerName} a pris l'extincteur.`);
+        syncMyState(posRef.current, '🧯', contribRef.current);
+      } else if (currentItem === '🧯') {
+        heldRef.current = '';
+        setHeldItem('');
+        addLog(`🧯 ${playerName} a rangé l'extincteur.`);
+        syncMyState(posRef.current, '', contribRef.current);
+      }
+      return;
+    }
+
+    // 1. Crate: Take raw ingredient
     if (nearby.type === 'crate' && currentItem === '') {
       const item = nearby.item;
       heldRef.current = item;
@@ -129,82 +164,106 @@ export default function App() {
       addLog(`${playerEmoji} ${playerName} a pris ${item}`);
       syncMyState(posRef.current, item, contribRef.current);
     } 
-    // 2. Cutting Board interaction
+    // 2. Prep Cutting Board (Interactive Rhythm Chopping Mini-Game)
     else if (nearby.type === 'board') {
-      // If finished item is waiting on the board, pick it up!
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
-        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} découpé`);
+        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} préparé`);
         syncMyState(posRef.current, picked, contribRef.current);
-      } 
-      // If holding an item and board is free, place it down to start cutting (2s timer)
-      else if (currentItem !== '' && !stState.progress && !stState.readyItem) {
-        const itemToCut = currentItem;
+      } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
+        const itemToPrep = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
 
-        startStationAction(nearby.id, 2000, '🔪 Découpe...', itemToCut, (rawItem) => {
-          const choppedMap = { '🍅': '🥗', '🌶️': '⚡', '🍗': '🍖', '🧄': '🧄' };
-          return choppedMap[rawItem] || '🥗';
+        // Trigger Interactive Rhythm Chopping Mini-Game
+        setMinigameData({
+          stationId: nearby.id,
+          type: 'chopping',
+          targetTaps: 5,
+          currentTaps: 0,
+          item: itemToPrep,
+          label: '🔪 Appuyez ESPACE / Tap en Cadence !'
         });
       }
     } 
-    // 3. Stove / Tagine Pot interaction
+    // 3. Cook Stoves / Tagines (Interactive Heat & Simmer Control)
     else if (nearby.type === 'stove') {
-      // If finished cooked dish is waiting, pick it up!
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
-        addLog(`${playerEmoji} ${playerName} a récupéré un plat chaud 🔥`);
+        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} du tagine 🔥`);
         syncMyState(posRef.current, picked, contribRef.current);
-      } 
-      // If holding an item and stove is free, place it down to cook (4s timer)
-      else if (currentItem !== '' && !stState.progress && !stState.readyItem) {
+      } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
         const itemToCook = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
 
-        startStationAction(nearby.id, 4000, '🍲 Cuisson...', itemToCook, () => '🍲');
+        // Start Cooking Timer with active heat balance
+        startCookingAction(nearby.id, 4000, itemToCook);
       }
-    } 
-    // 4. Serving Counter
-    else if (nearby.type === 'serve' && currentItem === '🍲') {
-      heldRef.current = '';
-      setHeldItem('');
-      const newScore = scoreRef.current + 10;
-      const newContrib = contribRef.current + 10;
-      contribRef.current = newContrib;
-      setMyContributions(newContrib);
-      setScore(newScore);
-      addLog(`${playerEmoji} ${playerName} a servi un plat avec succès ! (+10 pts) 🛎️`);
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
-      syncMyState(posRef.current, '', contribRef.current);
-    } 
-    // Wrong step penalty
-    else {
-      const penaltyScore = Math.max(0, scoreRef.current - 5);
-      setScore(penaltyScore);
-      scoreRef.current = penaltyScore;
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
-      addLog(`❌ ERREUR DE RECETTE ! ${playerName} a commis une erreur (-5 pts)`);
+    }
+    // 4. Central Pass-Through Counter (Drop or swap prep/cook items between stations)
+    else if (nearby.type === 'pass') {
+      if (stState.readyItem && currentItem === '') {
+        const picked = stState.readyItem;
+        heldRef.current = picked;
+        setHeldItem(picked);
+        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
+        addLog(`🪟 ${playerName} a pris un plat du passe-plats central.`);
+        syncMyState(posRef.current, picked, contribRef.current);
+      } else if (currentItem !== '' && !stState.readyItem) {
+        const dropped = currentItem;
+        heldRef.current = '';
+        setHeldItem('');
+        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: dropped } }));
+        addLog(`🪟 ${playerName} a déposé ${dropped} sur le passe-plats central.`);
+        syncMyState(posRef.current, '', contribRef.current);
+      }
+    }
+    // 5. Serving Counter (Deliver ticket order)
+    else if (nearby.type === 'serve') {
+      if (currentItem === activeTicket.requiredCook || currentItem === '🍲' || currentItem === '🫖') {
+        heldRef.current = '';
+        setHeldItem('');
+        const pts = activeTicket.points;
+        const newScore = scoreRef.current + pts;
+        const newContrib = contribRef.current + pts;
+        contribRef.current = newContrib;
+        setMyContributions(newContrib);
+        setScore(newScore);
+        addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts} pts) 🛎️`);
+        
+        // Rotate to next dynamic recipe ticket
+        const nextRecipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
+        setActiveTicket(nextRecipe);
+
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore, activeTicketTitle: nextRecipe.title });
+        syncMyState(posRef.current, '', contribRef.current);
+      } else {
+        const penaltyScore = Math.max(0, scoreRef.current - 5);
+        setScore(penaltyScore);
+        scoreRef.current = penaltyScore;
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
+        addLog(`❌ ERREUR DE SERVICE ! Plat non conforme (-5 pts)`);
+      }
     }
   };
 
-  const startStationAction = (stationId, duration, label, placedItem, getResultItem) => {
+  const startCookingAction = (stationId, duration, rawItem) => {
     const intervalTime = 50;
     const steps = duration / intervalTime;
     let currentStep = 0;
 
     setStationStates(prev => ({
       ...prev,
-      [stationId]: { progress: 0, label, currentItem: placedItem, readyItem: null }
+      [stationId]: { progress: 0, label: '🔥 Cuisson...', currentItem: rawItem, readyItem: null }
     }));
 
     const timer = setInterval(() => {
@@ -218,7 +277,7 @@ export default function App() {
 
       if (currentStep >= steps) {
         clearInterval(timer);
-        const result = getResultItem(placedItem);
+        const result = rawItem === '🌿' ? '🫖' : '🍲';
         setStationStates(prev => ({
           ...prev,
           [stationId]: { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result }
@@ -227,10 +286,53 @@ export default function App() {
     }, intervalTime);
   };
 
+  // Handle Rhythm Chopping Interaction
+  const handleMinigameTap = () => {
+    if (!minigameData) return;
+    const updatedTaps = minigameData.currentTaps + 1;
+    if (updatedTaps >= minigameData.targetTaps) {
+      // Completed chopping successfully
+      const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🧄': '🥗', '🌿': '🌿' };
+      const result = choppedMap[minigameData.item] || '🥗';
+      
+      setStationStates(prev => ({
+        ...prev,
+        [minigameData.stationId]: { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result }
+      }));
+      addLog(`🔪 Découpe réussie ! Ingrédient préparé ➔ ${result}`);
+      setMinigameData(null);
+    } else {
+      setMinigameData(prev => ({ ...prev, currentTaps: updatedTaps }));
+    }
+  };
+
+  // Random Kitchen Grease Fire generator
+  useEffect(() => {
+    if (gameState !== 'playing' || isHost) return;
+    const fireInterval = setInterval(() => {
+      if (Math.random() < 0.25) { // 25% chance every 12s
+        const stoveStations = STATIONS.filter(s => s.type === 'stove');
+        const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
+        
+        setStationStates(prev => ({
+          ...prev,
+          [randomStove.id]: { ...prev[randomStove.id], fire: true, label: '🔥 FEU DE CUISINE !' }
+        }));
+        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Utilisez l'extincteur (🧯) !`);
+      }
+    }, 12000);
+    return () => clearInterval(fireInterval);
+  }, [gameState, isHost]);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing' || isHost) return;
       const step = 4;
+      if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        handleMinigameTap();
+        return;
+      }
       if (['w', 'W', 'ArrowUp'].includes(e.key)) movePlayer(0, -step);
       if (['s', 'S', 'ArrowDown'].includes(e.key)) movePlayer(0, step);
       if (['a', 'A', 'ArrowLeft'].includes(e.key)) movePlayer(-step, 0);
@@ -242,7 +344,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, stationStates]);
+  }, [gameState, isHost, minigameData]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -309,7 +411,7 @@ export default function App() {
 
   const startShift = () => {
     if (Object.keys(players).length < 2) {
-      alert('⚠️ Minimum 2 Chefs requis !');
+      alert('⚠️ Minimum 2 Chefs requis pour la co-op !');
       return;
     }
 
@@ -327,7 +429,7 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { countdown: count });
       } else {
         clearInterval(cdInterval);
-        const targetEnd = Date.now() + 60000;
+        const targetEnd = Date.now() + 120000; // 120s shift length
         if (db && roomCode) {
           update(ref(db, `rooms/${roomCode}`), { status: 'playing', countdown: 0, endTime: targetEnd });
         }
@@ -338,8 +440,6 @@ export default function App() {
   const handleProfileSubmit = (e) => {
     e.preventDefault();
     if (!playerName.trim()) return;
-    const recipeIndex = Math.abs(playerName.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) % RECIPES.length;
-    setMyRecipe(RECIPES[recipeIndex]);
     setScreen('menu');
   };
 
@@ -352,7 +452,7 @@ export default function App() {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         score: 0,
-        logs: [`👑 ${playerName} a créé la cuisine ${code}`]
+        logs: [`👑 ${playerName} a ouvert la cuisine co-op ${code}`]
       });
     }
   };
@@ -393,13 +493,13 @@ export default function App() {
         }
         @keyframes knifeChopping {
           0% { transform: rotate(0deg) translateY(0); }
-          50% { transform: rotate(-25deg) translateY(-6px); }
+          50% { transform: rotate(-30deg) translateY(-8px); }
           100% { transform: rotate(0deg) translateY(0); }
         }
-        @keyframes bubblingPot {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.06); }
-          100% { transform: scale(1); }
+        @keyframes fireAlarm {
+          0% { transform: scale(1); filter: brightness(1); }
+          50% { transform: scale(1.1); filter: brightness(1.5) drop-shadow(0 0 10px #ef4444); }
+          100% { transform: scale(1); filter: brightness(1); }
         }
         @keyframes spin {
           0% { transform: rotate(0deg); }
@@ -408,8 +508,8 @@ export default function App() {
         * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .knife-anim { animation: knifeChopping 0.3s ease-in-out infinite; }
-        .stove-anim { animation: bubblingPot 0.6s ease-in-out infinite; }
+        .knife-anim { animation: knifeChopping 0.25s ease-in-out infinite; }
+        .fire-anim { animation: fireAlarm 0.5s ease-in-out infinite; }
         .falling-emoji {
           position: fixed;
           top: -60px;
@@ -444,8 +544,8 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron 🌶️</h1>
-            <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef</p>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.0 🌶️</h1>
+            <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
                 type="text"
@@ -482,7 +582,7 @@ export default function App() {
           <div style={styles.menuBox}>
             <div style={styles.heroBadge}>Bienvenue, {playerEmoji} {playerName}</div>
             <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
-            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger la Cuisine</button>
+            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger la Cuisine Co-op</button>
             <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
             <form onSubmit={joinRoom} style={styles.form}>
               <input
@@ -509,12 +609,12 @@ export default function App() {
               </button>
             </div>
             <div style={styles.scoreBoard}>🪙 {score}</div>
-            <div style={styles.codeBadge}>⏱️ {gameState === 'playing' ? `${timeLeft}s` : '60s'}</div>
+            <div style={styles.codeBadge}>⏱️ {gameState === 'playing' ? `${timeLeft}s` : '120s'}</div>
           </div>
 
           <div style={styles.hostMainGrid}>
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>🧑‍🍳 Chefs Actifs ({Object.keys(players).length} / Min 2)</h3>
+              <h3 style={styles.panelTitle}>🧑‍🍳 Chefs en Co-op ({Object.keys(players).length} / Min 2)</h3>
               <ul style={styles.playerList}>
                 {Object.keys(players).length === 0 ? (
                   <p style={{ color: '#64748b', textAlign: 'center', marginTop: '30px' }}>En attente de chefs...</p>
@@ -530,10 +630,10 @@ export default function App() {
             </div>
 
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>📜 Journal & Erreurs de Cuisine</h3>
+              <h3 style={styles.panelTitle}>📜 Journal & Incidents de Cuisine</h3>
               <div style={styles.logsBox}>
                 {logs.map((lg, idx) => (
-                  <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') ? '#ef4444' : '#cbd5e1' }}>{lg}</div>
+                  <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') || lg.includes('FEU') ? '#ef4444' : '#cbd5e1' }}>{lg}</div>
                 ))}
               </div>
             </div>
@@ -551,10 +651,10 @@ export default function App() {
                   cursor: Object.keys(players).length < 2 ? 'not-allowed' : 'pointer'
                 }}
               >
-                {gameState === 'gameover' ? '🔄 Relancer le Service' : `🚀 Démarrer (${Object.keys(players).length}/2)`}
+                {gameState === 'gameover' ? '🔄 Relancer le Service (120s)' : `🚀 Démarrer le Service (${Object.keys(players).length}/2)`}
               </button>
             ) : (
-              <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>🔥 Service en Cours !</div>
+              <div style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>🔥 Service Co-op en Cours !</div>
             )}
           </div>
         </div>
@@ -566,7 +666,7 @@ export default function App() {
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
             <h2 style={{ margin: '12px 0', fontSize: '1.6rem' }}>{playerEmoji} {playerName}</h2>
             <div style={styles.spinner}></div>
-            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal...</p>
+            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal pour démarrer (120s)...</p>
           </div>
         </div>
       )}
@@ -574,40 +674,45 @@ export default function App() {
       {gameState === 'countdown' && (
         <div style={styles.countdownOverlay}>
           <div key={countdown} className="countdown-num" style={styles.countdownText}>
-            {countdown > 0 ? countdown : '🔥 C’EST PARTI !'}
+            {countdown > 0 ? countdown : '🔥 EN CUISINE !'}
           </div>
         </div>
       )}
 
-      {/* ACTIVE GAMEPLAY SCREEN */}
+      {/* ACTIVE GAMEPLAY SCREEN (v3.0 Co-op) */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
-            <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 10 ? '#ef4444' : '#fff' }}>{timeLeft}s</strong></div>
+            <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff' }}>{timeLeft}s</strong></div>
             <div style={styles.scoreBoard}>🪙 {score}</div>
             <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.4rem' }}>{heldItem || '➖'}</span></div>
           </header>
 
           <div style={styles.activeLayout}>
-            {/* Left Caisse Array */}
+            {/* Dynamic Active Recipe Ticket Sidebar */}
             <div style={styles.recipeSidebar}>
-              <h4 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '0.95rem' }}>📦 Caisse & Ingrédients :</h4>
+              <h4 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '0.95rem' }}>🎫 Ticket Actif :</h4>
               <div style={styles.recipeCardItem}>
-                <div style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.8' }}>
-                  🍅 <strong>Tomate</strong><br/>
-                  🌶️ <strong>Piment</strong><br/>
-                  🍗 <strong>Poulet</strong><br/>
-                  🧄 <strong>Ail</strong>
+                <div style={{ fontSize: '0.9rem', color: '#fff', fontWeight: '700', marginBottom: '6px' }}>{activeTicket.title}</div>
+                <div style={{ fontSize: '0.8rem', color: '#cbd5e1', lineHeight: '1.6' }}>
+                  1. Prep : 🔪 <strong>{activeTicket.requiredPrep}</strong><br/>
+                  2. Cuisson : 🍲 <strong>{activeTicket.requiredCook}</strong><br/>
+                  Récompense : <span style={{ color: '#34d399', fontWeight: 'bold' }}>+{activeTicket.points} pts</span>
                 </div>
+              </div>
+              <h4 style={{ margin: '15px 0 8px 0', color: '#fbbf24', fontSize: '0.9rem' }}>📦 Caisses :</h4>
+              <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.5' }}>
+                🍅 Tomate | 🌶️ Piment<br/>🍗 Poulet | 🧄 Ail | 🌿 Menthe
               </div>
             </div>
 
-            {/* Kitchen Floor (Larger Sized Stations) */}
+            {/* Kitchen Floor */}
             <div style={styles.kitchenFloor}>
               {STATIONS.map((st) => {
                 const stState = stationStates[st.id] || {};
                 const isWorking = stState.progress > 0;
                 const isReady = !!stState.readyItem;
+                const hasFire = !!stState.fire;
 
                 return (
                   <div
@@ -617,33 +722,25 @@ export default function App() {
                       left: `${st.x}%`,
                       top: `${st.y}%`,
                       background: st.color,
-                      borderColor: isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.2)')
+                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.25)'))
                     }}
                   >
-                    {/* Animated Knife for Boards when working */}
-                    <div className={st.type === 'board' && isWorking ? 'knife-anim' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <span className={st.type === 'stove' && isWorking ? 'stove-anim' : ''} style={{ fontSize: '2.2rem' }}>
-                        {st.icon}
+                    <div className={hasFire ? 'fire-anim' : (st.type === 'board' && isWorking ? 'knife-anim' : '')} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                      <span style={{ fontSize: '2rem' }}>
+                        {hasFire ? '🔥' : st.icon}
                       </span>
                     </div>
 
-                    <span style={styles.stationLabel}>{st.label}</span>
+                    <span style={styles.stationLabel}>{hasFire ? 'FEU !' : st.label}</span>
 
-                    {/* Display item currently cooking/cutting inside or on the station */}
                     {stState.currentItem && (
-                      <div style={styles.stationItemBadge}>
-                        {stState.currentItem}
-                      </div>
+                      <div style={styles.stationItemBadge}>{stState.currentItem}</div>
                     )}
 
-                    {/* Display ready finished item waiting for pickup */}
                     {isReady && (
-                      <div style={styles.readyItemBadge}>
-                        {stState.readyItem} ✨
-                      </div>
+                      <div style={styles.readyItemBadge}>{stState.readyItem} ✨</div>
                     )}
 
-                    {/* Progress Bar for Station Actions */}
                     {isWorking && (
                       <div style={styles.stationTimerBadge}>
                         <div style={{ fontSize: '0.65rem', color: '#fbbf24', fontWeight: '700' }}>{stState.label}</div>
@@ -656,6 +753,7 @@ export default function App() {
                 );
               })}
 
+              {/* Other Players in Room */}
               {Object.keys(players).map((pid) => {
                 const p = players[pid];
                 const isMe = pid === myId;
@@ -682,6 +780,23 @@ export default function App() {
             </div>
           </div>
 
+          {/* Active Rhythm Chopping Minigame Modal Overlay */}
+          {minigameData && (
+            <div style={styles.minigameOverlay}>
+              <div style={styles.minigameCard}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#fbbf24' }}>🔪 Découpe en Cadence !</h3>
+                <p style={{ fontSize: '0.95rem', color: '#cbd5e1' }}>{minigameData.label}</p>
+                <div style={{ fontSize: '2.5rem', margin: '15px 0' }}>{minigameData.item} ➔ 🥗</div>
+                <div style={styles.miniTrackLarge}>
+                  <div style={{ ...styles.miniFillLarge, width: `${(minigameData.currentTaps / minigameData.targetTaps) * 100}%` }}></div>
+                </div>
+                <button onClick={handleMinigameTap} style={styles.tapActionBtn}>
+                  TAP / ESPACE ({minigameData.currentTaps}/{minigameData.targetTaps}) 🔪
+                </button>
+              </div>
+            </div>
+          )}
+
           <div style={styles.mobileControls}>
             <div style={styles.dpad}>
               <div></div>
@@ -699,12 +814,12 @@ export default function App() {
       {gameState === 'gameover' && !isHost && (
         <div key="over" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.resultsCard}>
-            <h2 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '1.6rem' }}>🏁 Service Terminé !</h2>
+            <h2 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '1.6rem' }}>🏁 Service Co-op Terminé !</h2>
             <p style={{ fontSize: '1.2rem', margin: '5px 0' }}>Score d’Équipe : <strong>🪙 {score}</strong></p>
             <p style={{ color: '#34d399', fontSize: '1rem', fontWeight: '600' }}>Votre Contribution : {myContributions} pts</p>
 
             <div style={{ marginTop: '15px', textAlign: 'left' }}>
-              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', color: '#94a3b8' }}>📊 Classement Global (1 min) :</h4>
+              <h4 style={{ margin: '0 0 6px 0', fontSize: '0.9rem', color: '#94a3b8' }}>📊 Classement Global (120s) :</h4>
               <div style={styles.lbBox}>
                 {leaderboard.map((entry, idx) => (
                   <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
@@ -716,7 +831,7 @@ export default function App() {
             </div>
 
             <button onClick={() => window.location.reload()} style={{ ...styles.primaryButton, marginTop: '15px' }}>
-              🔄 Rejouer
+              🔄 Rejouer le Service
             </button>
           </div>
         </div>
@@ -769,14 +884,13 @@ const styles = {
   scoreBoard: { fontSize: '1.3rem', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.15)', padding: '8px 18px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.3)' },
   
   activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '10px', gap: '10px' },
-  recipeSidebar: { width: '220px', background: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '15px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' },
+  recipeSidebar: { width: '240px', background: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '15px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' },
   recipeCardItem: { background: 'rgba(30, 41, 59, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' },
 
   kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '2px dashed #334155', overflow: 'hidden' },
   
-  // Upgraded larger station dimensions
-  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '84px', height: '84px', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '2px solid rgba(255,255,255,0.25)' },
-  stationLabel: { fontSize: '0.65rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)' },
+  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '82px', height: '82px', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '2px solid rgba(255,255,255,0.25)' },
+  stationLabel: { fontSize: '0.6rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)', textAlign: 'center' },
   
   stationItemBadge: { position: 'absolute', top: '-14px', right: '-8px', background: '#334155', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: '2px solid #fbbf24', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' },
   readyItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#10b981', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', border: '2px solid #fff', boxShadow: '0 0 12px rgba(16, 185, 129, 0.8)', animation: 'popScale 0.4s ease-out' },
@@ -784,6 +898,12 @@ const styles = {
   stationTimerBadge: { position: 'absolute', bottom: '-26px', background: '#1e293b', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', width: '92px', textAlign: 'center', zIndex: 20 },
   miniTrack: { width: '100%', height: '5px', background: '#0f172a', borderRadius: '3px', overflow: 'hidden', marginTop: '2px' },
   miniFill: { height: '100%', background: 'linear-gradient(90deg, #f59e0b, #10b981)' },
+
+  minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  minigameCard: { background: '#1e1b4b', border: '2px solid #fbbf24', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '360px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' },
+  miniTrackLarge: { width: '100%', height: '14px', background: '#0f172a', borderRadius: '7px', overflow: 'hidden', margin: '15px 0', border: '1px solid rgba(255,255,255,0.2)' },
+  miniFillLarge: { height: '100%', background: 'linear-gradient(90deg, #3b82f6, #10b981)' },
+  tapActionBtn: { width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none', padding: '14px', fontSize: '1.1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
 
   playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.85)', padding: '6px 12px', borderRadius: '16px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
   heldBubble: { position: 'absolute', top: '-30px', background: '#fff', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '2px solid #f59e0b' },
