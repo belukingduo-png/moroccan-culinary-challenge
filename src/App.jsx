@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.2-zellige";
+const APP_VERSION = "v12.3-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -40,7 +40,7 @@ const PLATFORMS_W1 = [
 
 const PLATFORMS_W2 = [
   { x: 220, offsetFromGround: 150, w: 180, h: 24 },
-  { x: 500, offsetFromGround: 320, w: 160, h: 24 }, // High vertical climb for Cutting Board!
+  { x: 500, offsetFromGround: 320, w: 160, h: 24 },
   { x: 780, offsetFromGround: 180, w: 200, h: 24 },
   { x: 1060, offsetFromGround: 280, w: 190, h: 24 },
   { x: 1380, offsetFromGround: 140, w: 210, h: 24 },
@@ -50,7 +50,7 @@ const PLATFORMS_W2 = [
 const PLATFORMS_W3 = [
   { x: 200, offsetFromGround: 200, w: 200, h: 24 },
   { x: 520, offsetFromGround: 140, w: 220, h: 24 },
-  { x: 840, offsetFromGround: 350, w: 150, h: 24 }, // Extreme high climb for Item!
+  { x: 840, offsetFromGround: 350, w: 150, h: 24 },
   { x: 1160, offsetFromGround: 220, w: 210, h: 24 },
   { x: 1500, offsetFromGround: 160, w: 230, h: 24 }
 ];
@@ -59,13 +59,13 @@ const PLATFORMS_W4 = [
   { x: 240, offsetFromGround: 180, w: 180, h: 24 },
   { x: 580, offsetFromGround: 290, w: 190, h: 24 },
   { x: 920, offsetFromGround: 150, w: 200, h: 24 },
-  { x: 1260, offsetFromGround: 360, w: 160, h: 24 }, // Skyscraper climb for Item!
+  { x: 1260, offsetFromGround: 360, w: 160, h: 24 },
   { x: 1600, offsetFromGround: 220, w: 200, h: 24 }
 ];
 
 const PLATFORMS_W5 = [
   { x: 220, offsetFromGround: 160, w: 220, h: 24 },
-  { x: 600, offsetFromGround: 300, w: 180, h: 24 }, // High climb for Cutting Board!
+  { x: 600, offsetFromGround: 300, w: 180, h: 24 },
   { x: 980, offsetFromGround: 190, w: 230, h: 24 },
   { x: 1380, offsetFromGround: 270, w: 200, h: 24 },
   { x: 1750, offsetFromGround: 150, w: 220, h: 24 }
@@ -78,7 +78,6 @@ const WORLDS_CONFIG = [
     bgStyle: { background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
     platforms: PLATFORMS_W1,
     items: [{ id: 'item_1', x: 220, y: 130, type: '🍅' }],
-    // Order: Item (220) -> Cutting Board (600) -> Pot (1100) -> Counter (1880)
     stations: { cuttingBoard: { x: 600, offsetFromGround: 230 }, pot: { x: 1100, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
@@ -97,7 +96,6 @@ const WORLDS_CONFIG = [
     bgStyle: { background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)' },
     platforms: PLATFORMS_W2,
     items: [{ id: 'item_w2_1', x: 780, y: 180, type: '🍄' }],
-    // Order: Cutting Board (500 - high climb) -> Item (780) -> Pot (1380) -> Counter (1700)
     stations: { cuttingBoard: { x: 500, offsetFromGround: 320 }, pot: { x: 1380, offsetFromGround: 140 }, counter: { x: 1700, offsetFromGround: 250 } },
     recipe: {
       name: "Couscous aux Champignons",
@@ -115,8 +113,7 @@ const WORLDS_CONFIG = [
     name: "Monde 3 : Volcan Infernal 🔥",
     bgStyle: { background: 'linear-gradient(180deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%)' },
     platforms: PLATFORMS_W3,
-    items: [{ id: 'item_w3_1', x: 840, y: 350, type: '🌶️' }], // Very high climb item!
-    // Order: Pot (520) -> Cutting Board (1160) -> Item (840) -> Counter (1500)
+    items: [{ id: 'item_w3_1', x: 840, y: 350, type: '🌶️' }],
     stations: { pot: { x: 520, offsetFromGround: 140 }, cuttingBoard: { x: 1160, offsetFromGround: 220 }, counter: { x: 1500, offsetFromGround: 160 } },
     recipe: {
       name: "Merguez Piquantes",
@@ -134,8 +131,7 @@ const WORLDS_CONFIG = [
     name: "Monde 4 : Vide Cosmique 🔮",
     bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
     platforms: PLATFORMS_W4,
-    items: [{ id: 'item_w4_1', x: 1260, y: 360, type: '🧄' }], // Skyscraper climb item!
-    // Order: Counter (580) -> Pot (920) -> Item (1260) -> Cutting Board (1600)
+    items: [{ id: 'item_w4_1', x: 1260, y: 360, type: '🧄' }],
     stations: { counter: { x: 580, offsetFromGround: 290 }, pot: { x: 920, offsetFromGround: 150 }, cuttingBoard: { x: 1600, offsetFromGround: 220 } },
     recipe: {
       name: "Pastilla au Poulet & Ail",
@@ -154,7 +150,6 @@ const WORLDS_CONFIG = [
     bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
     platforms: PLATFORMS_W5,
     items: [{ id: 'item_w5_1', x: 980, y: 190, type: '🍋' }],
-    // Order: Pot (220) -> Item (980) -> Counter (1380) -> Cutting Board (600 - high climb)
     stations: { pot: { x: 220, offsetFromGround: 160 }, counter: { x: 1380, offsetFromGround: 270 }, cuttingBoard: { x: 600, offsetFromGround: 300 } },
     recipe: {
       name: "Poulet Citron Confit",
@@ -197,7 +192,13 @@ export default function App() {
 
   const [players, setPlayers] = useState({});
   const [currentWorldIndex, setCurrentWorldIndex] = useState(0);
+  const currentWorldIndexRef = useRef(0);
   const worldConfig = WORLDS_CONFIG[currentWorldIndex];
+
+  const updateCurrentWorldIndex = (idx) => {
+    currentWorldIndexRef.current = idx;
+    setCurrentWorldIndex(idx);
+  };
 
   const [worldItems, setWorldItems] = useState(worldConfig.items);
   const [stationState, setStationState] = useState({
@@ -211,7 +212,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.2 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.3 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Game completion timer & leaderboard state
@@ -443,19 +444,20 @@ export default function App() {
       return;
     }
 
+    const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
     const floorY = viewportRef.current.h - GROUND_HEIGHT;
     const px = posRef.current.x;
     const py = posRef.current.y;
-    const stations = worldConfig.stations;
+    const stations = activeWorldCfg.stations;
 
-    const cbPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
-    const cbWorldY = floorY - cbPlatform.offsetFromGround;
+    const cbPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
+    const cbWorldY = cbPlatform ? floorY - cbPlatform.offsetFromGround : floorY;
 
-    const potPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
-    const potWorldY = floorY - potPlatform.offsetFromGround;
+    const potPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
+    const potWorldY = potPlatform ? floorY - potPlatform.offsetFromGround : floorY;
 
-    const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
-    const counterWorldY = floorY - counterPlatform.offsetFromGround;
+    const counterPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
+    const counterWorldY = counterPlatform ? floorY - counterPlatform.offsetFromGround : floorY;
 
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
@@ -471,7 +473,7 @@ export default function App() {
         setScore(prev => prev + 300);
 
         // Check if this was World 5 (Final World)
-        if (currentWorldIndex >= WORLDS_CONFIG.length - 1) {
+        if (currentWorldIndexRef.current >= WORLDS_CONFIG.length - 1) {
           const endTime = Date.now();
           const elapsedSec = Math.floor((endTime - gameStartTime) / 1000);
           const mins = Math.floor(elapsedSec / 60);
@@ -492,10 +494,10 @@ export default function App() {
         setTimeout(() => { setShowPortal(true); }, 800);
 
         setTimeout(() => {
-          const nextWorldIdx = currentWorldIndex + 1;
+          const nextWorldIdx = currentWorldIndexRef.current + 1;
           const nextCfg = WORLDS_CONFIG[nextWorldIdx];
           
-          setCurrentWorldIndex(nextWorldIdx);
+          updateCurrentWorldIndex(nextWorldIdx);
           setWorldItems(nextCfg.items);
           itemsRef.current = nextCfg.items;
           
@@ -567,7 +569,7 @@ export default function App() {
       let pickedItem = null;
       itemsRef.current.forEach(item => {
         const xDist = Math.abs(px - item.x);
-        const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
+        const itemPlatform = activeWorldCfg.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
         const yDist = Math.abs(py - itemWorldY);
 
@@ -637,6 +639,7 @@ export default function App() {
     const interval = setInterval(() => {
       if (countdown !== null || activeMinigame !== null) return;
 
+      const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
       const floorY = viewportRef.current.h - GROUND_HEIGHT;
       let vx = velRef.current.x;
       let vy = velRef.current.y;
@@ -674,8 +677,8 @@ export default function App() {
       }
 
       if (vy >= 0) {
-        for (let i = 0; i < worldConfig.platforms.length; i++) {
-          const plat = worldConfig.platforms[i];
+        for (let i = 0; i < activeWorldCfg.platforms.length; i++) {
+          const plat = activeWorldCfg.platforms[i];
           const platTop = floorY - plat.offsetFromGround;
           const withinX = px + HITBOX_HALF_W > plat.x && px - HITBOX_HALF_W < plat.x + plat.w;
           const crossedTop = prevY <= platTop + 4 && py >= platTop;
@@ -716,7 +719,7 @@ export default function App() {
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, isHost, countdown, activeMinigame, worldConfig, isGameFinished]);
+  }, [gameState, isHost, countdown, activeMinigame, isGameFinished]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -788,13 +791,13 @@ export default function App() {
 
   const stations = worldConfig.stations;
   const cbPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
-  const cbTop = floorY - cbPlatform.offsetFromGround - 42;
+  const cbTop = cbPlatform ? floorY - cbPlatform.offsetFromGround - 42 : floorY - 60;
 
   const potPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
-  const potTop = floorY - potPlatform.offsetFromGround - 48;
+  const potTop = potPlatform ? floorY - potPlatform.offsetFromGround - 48 : floorY - 60;
 
   const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
-  const counterTop = floorY - counterPlatform.offsetFromGround - 52;
+  const counterTop = counterPlatform ? floorY - counterPlatform.offsetFromGround - 52 : floorY - 60;
 
   // Calculate target X position for guidance
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
@@ -920,7 +923,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.2)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.3)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1149,7 +1152,7 @@ export default function App() {
               return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
-            {/* Cutting Board Station on Platform (Perfectly Centered) */}
+            {/* Cutting Board Station on Platform */}
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1169,7 +1172,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Station on Platform (Perfectly Centered) */}
+            {/* Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
