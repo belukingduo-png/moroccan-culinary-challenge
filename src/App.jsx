@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v4.1";
+const APP_VERSION = "v4.2";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,19 +16,13 @@ try {
   console.warn("Firebase error:", e);
 }
 
-// Stations strictly separated into Left (Prep) and Right (Cook/Serve) zones
 const STATIONS = [
-  // Left Side: Prep Zone
   { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 25, color: '#ef4444', zone: 'prep' },
   { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 48, color: '#f97316', zone: 'prep' },
   { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 71, color: '#eab308', zone: 'prep' },
   { id: 'crate_mint', icon: '🌿', type: 'crate', item: '🌿', label: 'Caisse Menthe', x: 12, y: 92, color: '#22c55e', zone: 'prep' },
   { id: 'board_1', icon: '🔪', type: 'board', label: 'Poste Découpe', x: 32, y: 50, color: '#3b82f6', zone: 'prep' },
-
-  // Center Barrier Bridge
   { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 50, color: '#ec4899', zone: 'barrier' },
-
-  // Right Side: Cook & Serve Zone
   { id: 'stove_tagine', icon: '🍲', type: 'stove', itemType: 'tagine', label: 'Tagine Cuisson', x: 68, y: 35, color: '#f59e0b', zone: 'cook' },
   { id: 'stove_tea', icon: '🫖', type: 'stove', itemType: 'tea', label: 'Theière', x: 68, y: 65, color: '#a855f7', zone: 'cook' },
   { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 25, color: '#64748b', zone: 'cook' },
@@ -36,6 +30,20 @@ const STATIONS = [
 ];
 
 const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'];
+
+const RANDOM_NAMES = [
+  "Chef Zellige", "SaffronMaster", "BaguetteBoss", "TajineKing", "MintTeaPro",
+  "CouscousChief", "HarissaHero", "OliveOven", "SpiceSamurai", "KitchenKnight",
+  "GourmetGuru", "PanPalette", "PepperPioneer", "BasilBaron", "SoupSultan",
+  "DoughDuke", "FlameFoodie", "GrillGuardian", "SizzleStar", "WokWizard",
+  "FeastFalcon", "BakeBandit", "CraveCaptain", "DishDragon", "FlavorPhoenix",
+  "MeltMaestro", "NoshNinja", "RecipeRider", "SnackSiren", "StewStryker",
+  "TacoTornado", "ZestZenith", "AppetiteAce", "BrothBoss", "CarbCommander",
+  "DineDynamo", "EaterEmperor", "ForkFighter", "GravyGiant", "HashHero",
+  "Ingrediator", "JusJuggernaut", "KneadKing", "LadleLord", "MunchMonarch",
+  "NourishNoble", "OvenOverlord", "PlatePrince", "QuesoQueen", "RouxRuler"
+];
+
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
 const RECIPES = [
@@ -45,7 +53,7 @@ const RECIPES = [
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState('profile');
+  const [screen, setScreen] = useState('home'); // home, mode_select, host_lobby, player_lobby, play, gameover
   const [playerName, setPlayerName] = useState('');
   const [playerEmoji, setPlayerEmoji] = useState('🧑‍🍳');
   const [roomCode, setRoomCode] = useState('');
@@ -58,7 +66,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.1 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.2 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -71,7 +79,7 @@ export default function App() {
   const [stationStates, setStationStates] = useState({});
   const [minigameData, setMinigameData] = useState(null);
   const [tempMinigame, setTempMinigame] = useState(null);
-  const [achievementPopup, setAchievementPopup] = useState({ text: 'Chef Gauche : Prendre 🍅', state: 'active' });
+  const [achievementPopup, setAchievementPopup] = useState(null);
   const [congratsModal, setCongratsModal] = useState(null);
   const [pausedTimer, setPausedTimer] = useState(false);
 
@@ -95,6 +103,16 @@ export default function App() {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getRandomUniqueProfile = (existingPlayers = {}) => {
+    const usedNames = Object.values(existingPlayers).map(p => p.name);
+    const availableNames = RANDOM_NAMES.filter(n => !usedNames.includes(n));
+    const randomName = availableNames.length > 0 
+      ? availableNames[Math.floor(Math.random() * availableNames.length)] 
+      : "Chef " + Math.floor(Math.random() * 1000);
+    const randomEmoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    return { name: randomName, emoji: randomEmoji };
   };
 
   const syncLiveAchievement = (completedText, nextText) => {
@@ -129,7 +147,20 @@ export default function App() {
         y: newPos.y,
         item: newItem,
         contributions: newContrib,
-        role: roleRef.current
+        role: roleRef.current,
+        name: playerName,
+        emoji: playerEmoji
+      });
+    }
+  };
+
+  const handleCustomizationChange = (newName, newEmoji) => {
+    setPlayerName(newName);
+    setPlayerEmoji(newEmoji);
+    if (db && roomCode && !isHost) {
+      update(ref(db, `rooms/${roomCode}/players/${myId}`), {
+        name: newName,
+        emoji: newEmoji
       });
     }
   };
@@ -194,7 +225,6 @@ export default function App() {
       return;
     }
 
-    // 1. Crate: Take Ingredient (Prep side)
     if (nearby.type === 'crate' && currentItem === '') {
       if (roleRef.current !== 'prep') {
         addLog(`⚠️ C'est le côté préparation (Chef Gauche) !`);
@@ -223,7 +253,6 @@ export default function App() {
         addLog(`❌ Mauvais ingrédient ! Il faut ${activeTicket.requiredItem}`);
       }
     } 
-    // 2. Cutting Board (Prep side)
     else if (nearby.type === 'board') {
       if (roleRef.current !== 'prep') {
         addLog(`⚠️ Le poste de découpe est réservé au Chef Gauche !`);
@@ -252,7 +281,6 @@ export default function App() {
         });
       }
     } 
-    // 3. Stoves / Pots (Cook side - Validates exact correct pot dynamically)
     else if (nearby.type === 'stove') {
       if (roleRef.current !== 'cook') {
         addLog(`⚠️ La cuisson est réservée au Chef Droit !`);
@@ -289,7 +317,6 @@ export default function App() {
         });
       }
     }
-    // 4. Central Pass Counter (Barrier bridge)
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
@@ -321,7 +348,6 @@ export default function App() {
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
-    // 5. Serving Counter (Cook side)
     else if (nearby.type === 'serve') {
       if (roleRef.current !== 'cook') {
         addLog(`⚠️ Le service est réservé au Chef Droit !`);
@@ -618,27 +644,34 @@ export default function App() {
     }, 1000);
   };
 
-  const handleProfileSubmit = (e) => {
-    e.preventDefault();
-    if (!playerName.trim()) return;
-    setScreen('menu');
-  };
-
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const profile = getRandomUniqueProfile({});
     setRoomCode(code);
     setIsHost(true);
     setMyRole('prep');
     roleRef.current = 'prep';
+    setPlayerName(profile.name);
+    setPlayerEmoji(profile.emoji);
     setPos({ x: 25, y: 50 });
     posRef.current = { x: 25, y: 50 };
     setScreen('host_lobby');
+
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         score: 0,
         stations: {},
-        logs: [`👑 ${playerName} a ouvert la cuisine ${code}`]
+        logs: [`👑 ${profile.name} a ouvert la cuisine ${code}`]
+      });
+      set(ref(db, `rooms/${code}/players/${myId}`), {
+        name: profile.name,
+        emoji: profile.emoji,
+        x: 25,
+        y: 50,
+        item: '',
+        contributions: 0,
+        role: 'prep'
       });
     }
   };
@@ -649,10 +682,11 @@ export default function App() {
     setIsHost(false);
 
     let assignedRole = 'prep';
+    let existingPlayers = {};
     if (db) {
       try {
         const snap = await get(ref(db, `rooms/${roomCode}/players`));
-        const existingPlayers = snap.val() || {};
+        existingPlayers = snap.val() || {};
         const hasPrep = Object.values(existingPlayers).some(p => p.role === 'prep');
         assignedRole = hasPrep ? 'cook' : 'prep';
       } catch (err) {
@@ -660,8 +694,12 @@ export default function App() {
       }
     }
 
+    const profile = getRandomUniqueProfile(existingPlayers);
     setMyRole(assignedRole);
     roleRef.current = assignedRole;
+    setPlayerName(profile.name);
+    setPlayerEmoji(profile.emoji);
+
     const startX = assignedRole === 'prep' ? 22 : 78;
     setPos({ x: startX, y: 50 });
     posRef.current = { x: startX, y: 50 };
@@ -669,8 +707,8 @@ export default function App() {
     setScreen('player_lobby');
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
-        name: playerName,
-        emoji: playerEmoji,
+        name: profile.name,
+        emoji: profile.emoji,
         x: startX,
         y: 50,
         item: '',
@@ -697,6 +735,11 @@ export default function App() {
           0% { transform: translateY(-10vh) rotate(0deg); opacity: 0.8; }
           100% { transform: translateY(110vh) rotate(720deg); opacity: 0.1; }
         }
+        @keyframes pulseGreen {
+          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+          70% { transform: scale(1.05); box-shadow: 0 0 0 25px rgba(16, 185, 129, 0); }
+          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
         @keyframes knifeChopping {
           0% { transform: rotate(0deg) translateY(0); }
           50% { transform: rotate(-35deg) translateY(-10px); }
@@ -718,6 +761,7 @@ export default function App() {
         * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .pulse-btn { animation: pulseGreen 2s infinite; }
         .knife-anim { animation: knifeChopping 0.22s ease-in-out infinite; }
         .fire-anim { animation: fireAlarm 0.5s ease-in-out infinite; }
         .achievement-card { animation: achievementSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
@@ -733,7 +777,7 @@ export default function App() {
         button:active { transform: scale(0.93); }
       `}</style>
 
-      {(screen === 'profile' || screen === 'menu') && (
+      {(screen === 'home' || screen === 'mode_select') && (
         <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
           {backgroundParticles.map((p) => (
             <div
@@ -751,49 +795,31 @@ export default function App() {
         </div>
       )}
 
-      {screen === 'profile' && (
-        <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
+      {/* HOME SCREEN: Only Title and Flashing Green Play Button */}
+      {screen === 'home' && (
+        <div key="home" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v4.1 🌶️</h1>
-            <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
-            <form onSubmit={handleProfileSubmit} style={styles.form}>
-              <input
-                type="text"
-                placeholder="Votre nom..."
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                style={styles.input}
-                required
-              />
-              <div style={styles.emojiGrid}>
-                {EMOJIS.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    onClick={() => setPlayerEmoji(em)}
-                    style={{
-                      ...styles.emojiBtn,
-                      borderColor: playerEmoji === em ? '#10b981' : 'rgba(255,255,255,0.1)',
-                      background: playerEmoji === em ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)'
-                    }}
-                  >
-                    {em}
-                  </button>
-                ))}
-              </div>
-              <button type="submit" style={styles.primaryButton}>Continuer ➡️</button>
-            </form>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
+            <p style={styles.subSubtitle}>Cuisine Co-op Multijoueur</p>
+            <button 
+              onClick={() => setScreen('mode_select')} 
+              style={{ ...styles.primaryButton, ...styles.flashingPlayBtn }}
+              className="pulse-btn"
+            >
+              ▶️ JOUER
+            </button>
           </div>
         </div>
       )}
 
-      {screen === 'menu' && (
-        <div key="menu" className="screen-anim" style={styles.centeredWrapper}>
+      {/* MODE SELECT: Host or Join */}
+      {screen === 'mode_select' && (
+        <div key="mode_select" className="screen-anim" style={styles.centeredWrapper}>
+          <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <div style={styles.heroBadge}>Bienvenue, {playerEmoji} {playerName}</div>
             <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
-            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger la Cuisine Co-op</button>
+            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger une Partie</button>
             <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
             <form onSubmit={joinRoom} style={styles.form}>
               <input
@@ -804,12 +830,14 @@ export default function App() {
                 style={styles.input}
                 required
               />
-              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre</button>
+              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre une Partie</button>
             </form>
+            <button onClick={() => setScreen('home')} style={styles.backBtn}>⬅️ Retour</button>
           </div>
         </div>
       )}
 
+      {/* HOST LOBBY */}
       {isHost && (
         <div key="host" className="screen-anim" style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
@@ -871,16 +899,46 @@ export default function App() {
         </div>
       )}
 
+      {/* PLAYER LOBBY (CUSTOMIZABLE WHILE WAITING) */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.lobbyCard}>
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
-            <h2 style={{ margin: '15px 0', fontSize: '1.8rem', fontWeight: '800' }}>{playerEmoji} {playerName}</h2>
+            <h3 style={{ margin: '15px 0 10px 0', fontSize: '1.3rem', fontWeight: '800', color: '#fbbf24' }}>Personnalisez votre Chef :</h3>
+            
+            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+              <input
+                type="text"
+                value={playerName}
+                onChange={(e) => handleCustomizationChange(e.target.value, playerEmoji)}
+                style={styles.input}
+                placeholder="Votre nom de chef..."
+              />
+            </div>
+
+            <div style={styles.emojiGrid}>
+              {EMOJIS.map((em) => (
+                <button
+                  key={em}
+                  type="button"
+                  onClick={() => handleCustomizationChange(playerName, em)}
+                  style={{
+                    ...styles.emojiBtn,
+                    borderColor: playerEmoji === em ? '#10b981' : 'rgba(255,255,255,0.1)',
+                    background: playerEmoji === em ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)'
+                  }}
+                >
+                  {em}
+                </button>
+              ))}
+            </div>
+
             <div style={styles.roleBadgeContainer}>
               Rôle Attribué : <strong style={{ color: '#38bdf8' }}>{myRole === 'prep' ? '🔪 Chef Côté Gauche (Préparation)' : '🍲 Chef Côté Droit (Cuisson & Service)'}</strong>
             </div>
+
             <div style={styles.spinner}></div>
-            <p style={{ marginTop: '18px', color: '#e2e8f0', fontSize: '1.15rem', fontWeight: '700' }}>⏳ En attente du Chef Principal...</p>
+            <p style={{ marginTop: '14px', color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '700' }}>⏳ En attente du démarrage par le Chef Principal...</p>
           </div>
         </div>
       )}
@@ -917,7 +975,6 @@ export default function App() {
             <div style={styles.kitchenFloor}>
               <div style={styles.barrierLine}></div>
 
-              {/* Synchronized Live Instruction Banner */}
               {achievementPopup && (
                 <div key={achievementPopup.id || achievementPopup.text} className="achievement-card" style={{
                   ...styles.achievementBanner,
@@ -971,6 +1028,8 @@ export default function App() {
                 const px = isMe ? pos.x : (p.x || 50);
                 const py = isMe ? pos.y : (p.y || 50);
                 const pItem = isMe ? heldItem : p.item;
+                const displayName = p.name || playerName;
+                const displayEmoji = p.emoji || playerEmoji;
 
                 return (
                   <div
@@ -983,15 +1042,14 @@ export default function App() {
                     }}
                   >
                     {pItem && <div style={styles.heldBubble}>{pItem}</div>}
-                    <div style={{ fontSize: '2.4rem' }}>{p.emoji}</div>
-                    <div style={styles.playerTag}>{p.name} ({p.role === 'prep' ? 'Gauche' : 'Droit'})</div>
+                    <div style={{ fontSize: '2.4rem' }}>{displayEmoji}</div>
+                    <div style={styles.playerTag}>{displayName} ({p.role === 'prep' ? 'Gauche' : 'Droit'})</div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Congrats / Recipe Level-Up Overlay Modal */}
           {congratsModal && (
             <div style={styles.minigameOverlay}>
               <div style={styles.congratsCard}>
@@ -1014,7 +1072,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Rhythm Chopping Minigame Modal */}
           {minigameData && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
@@ -1031,7 +1088,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Temperature Slider Cooking Minigame Modal */}
           {tempMinigame && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
@@ -1099,9 +1155,9 @@ const styles = {
   centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px', boxSizing: 'border-box' },
   heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '6px 16px', borderRadius: '20px', fontSize: '1rem', fontWeight: 'bold', marginBottom: '12px' },
   mainGameTitle: { fontSize: 'clamp(2.4rem, 5vw, 3.5rem)', margin: '0 0 8px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 14px rgba(251, 191, 36, 0.35)' },
-  subSubtitle: { fontSize: '1.5rem', color: '#e2e8f0', marginBottom: '25px', fontWeight: '800', textAlign: 'center' },
+  subSubtitle: { fontSize: '1.4rem', color: '#e2e8f0', marginBottom: '35px', fontWeight: '700', textAlign: 'center' },
   menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '660px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  lobbyCard: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '35px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '580px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  lobbyCard: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '30px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '580px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   roleBadgeContainer: { background: 'rgba(15, 23, 42, 0.8)', padding: '12px 18px', borderRadius: '14px', margin: '15px 0', border: '1px solid rgba(255,255,255,0.15)', fontSize: '1.1rem' },
   resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.7)' },
@@ -1118,10 +1174,12 @@ const styles = {
   playerItem: { background: 'rgba(15, 23, 42, 0.7)', padding: '14px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)' },
   lbBox: { maxHeight: '160px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '12px', padding: '10px', border: '1px solid rgba(255,255,255,0.12)' },
   lbItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', fontSize: '1rem', marginBottom: '6px' },
-  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px', margin: '18px 0' },
-  emojiBtn: { fontSize: '1.8rem', padding: '12px', borderRadius: '16px', border: '1px solid', cursor: 'pointer' },
+  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', margin: '10px 0 15px 0', maxHeight: '130px', overflowY: 'auto' },
+  emojiBtn: { fontSize: '1.6rem', padding: '8px', borderRadius: '12px', border: '1px solid', cursor: 'pointer' },
   primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)' },
+  flashingPlayBtn: { fontSize: '1.6rem', padding: '20px', maxWidth: '360px', margin: '15px auto 0 auto' },
   secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)' },
+  backBtn: { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', marginTop: '15px' },
   divider: { margin: '18px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.15)' },
   dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 10px', fontSize: '0.85rem', color: '#94a3b8', fontWeight: '800' },
   form: { display: 'flex', flexDirection: 'column', gap: '16px' },
