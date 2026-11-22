@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v3.5";
+const APP_VERSION = "v3.6";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,21 +16,21 @@ try {
   console.warn("Firebase error:", e);
 }
 
-// Stations split by Kitchen Zones (Left Prep Side vs Right Cook/Serve Side separated by barrier & pass counter)
+// Stations strictly separated into Left (Prep) and Right (Cook/Serve) zones with ONE cutting board, ONE Tagine, ONE Tea pot
 const STATIONS = [
-  // Left Side: Prep Zone (Crates & Cutting Boards)
+  // Left Side: Prep Zone
   { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 25, color: '#ef4444', zone: 'prep' },
-  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 50, color: '#f97316', zone: 'prep' },
-  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 75, color: '#eab308', zone: 'prep' },
-  { id: 'board_1', icon: '🔪', type: 'board', label: 'Découpe 1', x: 32, y: 35, color: '#3b82f6', zone: 'prep' },
-  { id: 'board_2', icon: '🔪', type: 'board', label: 'Découpe 2', x: 32, y: 65, color: '#3b82f6', zone: 'prep' },
+  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 48, color: '#f97316', zone: 'prep' },
+  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 71, color: '#eab308', zone: 'prep' },
+  { id: 'crate_mint', icon: '🌿', type: 'crate', item: '🌿', label: 'Caisse Menthe', x: 12, y: 92, color: '#22c55e', zone: 'prep' },
+  { id: 'board_1', icon: '🔪', type: 'board', label: 'Poste Découpe', x: 34, y: 50, color: '#3b82f6', zone: 'prep' },
 
-  // Center: Pass-Through Counter (The Barrier Bridge)
+  // Center Barrier Bridge
   { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 50, color: '#ec4899', zone: 'barrier' },
 
-  // Right Side: Cook & Serve Zone (Stoves, Extinguisher, Service Counter)
-  { id: 'stove_1', icon: '🍲', type: 'stove', label: 'Tagine Cuisson 1', x: 68, y: 35, color: '#f59e0b', zone: 'cook' },
-  { id: 'stove_2', icon: '🫖', type: 'stove', label: 'Tagine Cuisson 2', x: 68, y: 65, color: '#f59e0b', zone: 'cook' },
+  // Right Side: Cook & Serve Zone
+  { id: 'stove_tagine', icon: '🍲', type: 'stove', itemType: 'tagine', label: 'Tagine Cuisson', x: 68, y: 35, color: '#f59e0b', zone: 'cook' },
+  { id: 'stove_tea', icon: '🫖', type: 'stove', itemType: 'tea', label: 'Theière', x: 68, y: 65, color: '#a855f7', zone: 'cook' },
   { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 25, color: '#64748b', zone: 'cook' },
   { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981', zone: 'cook' },
 ];
@@ -39,9 +39,9 @@ const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '�
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
 const RECIPES = [
-  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredPrep: "🥗", requiredCook: "🍲", points: 15, hint: "Prendre Tomate/Piment ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Cuire au Tagine 🍲 ➔ Servir 🛎️ !" },
-  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredPrep: "🍖", requiredCook: "🍲", points: 20, hint: "Prendre Poulet 🍗 ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Cuire 🍲 ➔ Servir 🛎️ !" },
-  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredPrep: "🌿", requiredCook: "🫖", points: 15, hint: "Prendre Menthe 🌿 ➔ Découper 🔪 ➔ Passer par 🪟 ➔ Bouillir 🫖 ➔ Servir 🛎️ !" }
+  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredItem: '🍅', requiredPrep: '🥗', requiredPot: 'tagine', finalCook: '🍲', points: 15 },
+  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredItem: '🍗', requiredPrep: '🍖', requiredPot: 'tagine', finalCook: '🍲', points: 20 },
+  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredItem: '🌿', requiredPrep: '🌿', requiredPot: 'tea', finalCook: '🫖', points: 15 }
 ];
 
 export default function App() {
@@ -58,21 +58,26 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.5 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.6 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
-  const [pos, setPos] = useState({ x: 50, y: 50 });
+  // Determine player role based on join order (first player = prep left, second = cook right)
+  const [myRole, setMyRole] = useState('prep'); // 'prep' or 'cook'
+  const [pos, setPos] = useState({ x: 25, y: 50 });
   const [heldItem, setHeldItem] = useState('');
   const [myContributions, setMyContributions] = useState(0);
 
   const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
+  const [recipeStep, setRecipeStep] = useState(1); // 1: Take ingr, 2: Cut, 3: Cook, 4: Serve
   const [stationStates, setStationStates] = useState({});
   const [minigameData, setMinigameData] = useState(null);
   const [tempMinigame, setTempMinigame] = useState(null);
+  const [achievementPopup, setAchievementPopup] = useState(null);
   const [congratsModal, setCongratsModal] = useState(null);
+  const [pausedTimer, setPausedTimer] = useState(false);
 
-  const posRef = useRef({ x: 50, y: 50 });
+  const posRef = useRef({ x: 25, y: 50 });
   const heldRef = useRef('');
   const contribRef = useRef(0);
   const scoreRef = useRef(0);
@@ -93,6 +98,14 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const showAchievement = (text) => {
+    setAchievementPopup({ text, state: 'active' });
+    setTimeout(() => {
+      setAchievementPopup(prev => prev ? { ...prev, state: 'success' } : null);
+      setTimeout(() => setAchievementPopup(null), 1200);
+    }, 2000);
+  };
+
   const syncStationUpdate = (stationId, newStationData) => {
     setStationStates(prev => ({ ...prev, [stationId]: newStationData }));
     if (db && roomCode) {
@@ -106,15 +119,25 @@ export default function App() {
         x: newPos.x,
         y: newPos.y,
         item: newItem,
-        contributions: newContrib
+        contributions: newContrib,
+        role: myRole
       });
     }
   };
 
   const movePlayer = (dx, dy) => {
-    if (gameState !== 'playing' || isHost || minigameData || tempMinigame || congratsModal) return;
-    const nextX = Math.max(6, Math.min(95, posRef.current.x + dx));
-    const nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
+    if (gameState !== 'playing' || isHost || minigameData || tempMinigame || congratsModal || pausedTimer) return;
+    
+    let nextX = posRef.current.x + dx;
+    let nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
+
+    // Strict Barrier Enforcement: Prep side (left) cannot cross > 48, Cook side (right) cannot cross < 52
+    if (myRole === 'prep') {
+      nextX = Math.max(6, Math.min(48, nextX));
+    } else {
+      nextX = Math.max(52, Math.min(95, nextX));
+    }
+
     const updated = { x: nextX, y: nextY };
     posRef.current = updated;
     setPos(updated);
@@ -122,7 +145,7 @@ export default function App() {
   };
 
   const interactStation = () => {
-    if (gameState !== 'playing' || isHost) return;
+    if (gameState !== 'playing' || isHost || pausedTimer) return;
     const { x, y } = posRef.current;
     const nearby = STATIONS.find(s => Math.hypot(s.x - x, s.y - y) < 18);
     if (!nearby) return;
@@ -130,14 +153,15 @@ export default function App() {
     let currentItem = heldRef.current;
     const stState = stationStates[nearby.id] || {};
 
+    // Handle Fire extinguishing
     if (stState.fire) {
       if (currentItem === '🧯' || nearby.type === 'extinguisher') {
         syncStationUpdate(nearby.id, { ...stState, fire: false, progress: 0 });
-        addLog(`🧯 ${playerName} a éteint le feu sur ${nearby.label} !`);
+        addLog(`🧯 ${playerName} a éteint le feu !`);
       } else if (nearby.type === 'extinguisher' && currentItem === '') {
         heldRef.current = '🧯';
         setHeldItem('🧯');
-        addLog(`🧯 ${playerName} a pris l'extincteur !`);
+        addLog(`🧯 ${playerName} a pris l'extincteur.`);
         syncMyState(posRef.current, '🧯', contribRef.current);
       }
       return;
@@ -158,26 +182,45 @@ export default function App() {
       return;
     }
 
+    // 1. Crate: Take Ingredient (Prep side only)
     if (nearby.type === 'crate' && currentItem === '') {
-      const item = nearby.item;
-      heldRef.current = item;
-      setHeldItem(item);
-      addLog(`${playerEmoji} ${playerName} a pris ${item}`);
-      syncMyState(posRef.current, item, contribRef.current);
+      if (myRole !== 'prep') {
+        addLog(`⚠️ C'est le côté préparation (Chef Gauche) !`);
+        return;
+      }
+      if (nearby.item === activeTicket.requiredItem) {
+        const item = nearby.item;
+        heldRef.current = item;
+        setHeldItem(item);
+        const newScore = scoreRef.current + 5;
+        const newContrib = contribRef.current + 5;
+        scoreRef.current = newScore;
+        contribRef.current = newContrib;
+        setScore(newScore);
+        setMyContributions(newContrib);
+        setRecipeStep(2);
+        showAchievement(`✅ Ingrédient correct pris ! (+5 pts) ➔ Allez découper 🔪`);
+        addLog(`${playerEmoji} ${playerName} a pris ${item} (+5 pts)`);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
+        syncMyState(posRef.current, item, contribRef.current);
+      } else {
+        addLog(`❌ Mauvais ingrédient ! Il faut ${activeTicket.requiredItem}`);
+      }
     } 
+    // 2. Cutting Board (Prep side)
     else if (nearby.type === 'board') {
+      if (myRole !== 'prep') {
+        addLog(`⚠️ Le poste de découpe est réservé au Chef Gauche !`);
+        return;
+      }
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} préparé`);
+        addLog(`${playerEmoji} ${playerName} a récupéré ${picked}`);
         syncMyState(posRef.current, picked, contribRef.current);
-      } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
-        if (stState.currentItem) {
-          addLog(`⚠️ Ce poste de découpe est occupé ! Utilisez l'autre.`);
-          return;
-        }
+      } else if (currentItem === activeTicket.requiredItem && !stState.progress && !stState.readyItem) {
         const itemToPrep = currentItem;
         heldRef.current = '';
         setHeldItem('');
@@ -193,17 +236,22 @@ export default function App() {
         });
       }
     } 
+    // 3. Stoves / Pots (Cook side)
     else if (nearby.type === 'stove') {
+      if (myRole !== 'cook') {
+        addLog(`⚠️ La cuisson est réservée au Chef Droit !`);
+        return;
+      }
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} cuit du tagine 🔥`);
+        addLog(`${playerEmoji} ${playerName} a récupéré le plat cuit 🔥`);
         syncMyState(posRef.current, picked, contribRef.current);
-      } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
-        if (stState.currentItem) {
-          addLog(`⚠️ Ce tagine est déjà en cuisson ! Utilisez l'autre.`);
+      } else if (currentItem === activeTicket.requiredPrep && !stState.progress && !stState.readyItem) {
+        if (nearby.itemType !== activeTicket.requiredPot) {
+          addLog(`❌ Ce n'est pas le bon ustensile ! Il faut utiliser ${activeTicket.requiredPot === 'tagine' ? 'le Tagine 🍲' : 'la Théière 🫖'}`);
           return;
         }
         const itemToCook = currentItem;
@@ -220,46 +268,53 @@ export default function App() {
         });
       }
     }
+    // 4. Central Pass Counter (Barrier bridge)
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
         syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats central.`);
+        setRecipeStep(3);
+        showAchievement(`✅ Ingrédient récupéré du passe-plats ! (+5 pts) ➔ Cuire au Pot`);
+        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats.`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem !== '' && !stState.readyItem) {
         const dropped = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
-        addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté via le passe-plats !`);
+        addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté !`);
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
+    // 5. Serving Counter (Cook side)
     else if (nearby.type === 'serve') {
-      if (currentItem === activeTicket.requiredCook || currentItem === '🍲' || currentItem === '🫖') {
+      if (myRole !== 'cook') {
+        addLog(`⚠️ Le service est réservé au Chef Droit !`);
+        return;
+      }
+      if (currentItem === activeTicket.finalCook || currentItem === '🍲' || currentItem === '🫖') {
         heldRef.current = '';
         setHeldItem('');
         const pts = activeTicket.points;
-        const newScore = scoreRef.current + pts;
-        const newContrib = contribRef.current + pts;
+        const newScore = scoreRef.current + pts + 5; // +5 for serving step
+        const newContrib = contribRef.current + pts + 5;
+        scoreRef.current = newScore;
         contribRef.current = newContrib;
-        setMyContributions(newContrib);
         setScore(newScore);
-        addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts} pts) 🛎️`);
-        
-        const nextRecipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
-        setActiveTicket(nextRecipe);
+        setMyContributions(newContrib);
 
+        addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts + 5} pts) 🛎️`);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
+        syncMyState(posRef.current, '', contribRef.current);
+
+        // Pause timer & show congrats modal overlay
+        setPausedTimer(true);
         setCongratsModal({
           title: activeTicket.title,
-          points: pts,
-          nextRecipe: nextRecipe
+          earnedPts: pts + 5
         });
-
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore, activeTicket: nextRecipe });
-        syncMyState(posRef.current, '', contribRef.current);
       } else {
         const penaltyScore = Math.max(0, scoreRef.current - 5);
         setScore(penaltyScore);
@@ -270,6 +325,7 @@ export default function App() {
     }
   };
 
+  // Temperature Slider Minigame Loop
   useEffect(() => {
     if (!tempMinigame) return;
     const interval = setInterval(() => {
@@ -297,7 +353,17 @@ export default function App() {
     if (isSuccess) {
       const result = item === '🌿' ? '🫖' : '🍲';
       syncStationUpdate(stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
-      addLog(`🔥 Cuisson parfaite au tagine ! Résultat ➔ ${result}`);
+      
+      const newScore = scoreRef.current + 5;
+      const newContrib = contribRef.current + 5;
+      scoreRef.current = newScore;
+      contribRef.current = newContrib;
+      setScore(newScore);
+      setMyContributions(newContrib);
+      setRecipeStep(4);
+      showAchievement(`✅ Cuisson parfaite ! (+5 pts) ➔ Apporter au Comptoir 🛎️`);
+      addLog(`🔥 Cuisson réussie (+5 pts) ➔ ${result}`);
+      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
     } else {
       syncStationUpdate(stationId, { progress: 0, label: '', currentItem: null, readyItem: null, fire: false });
       const penaltyScore = Math.max(0, scoreRef.current - 5);
@@ -313,17 +379,28 @@ export default function App() {
     if (!minigameData) return;
     const updatedTaps = minigameData.currentTaps + 1;
     if (updatedTaps >= minigameData.targetTaps) {
-      const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🧄': '🥗', '🌿': '🌿' };
+      const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🌿': '🌿' };
       const result = choppedMap[minigameData.item] || '🥗';
       
       syncStationUpdate(minigameData.stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
-      addLog(`🔪 Découpe réussie ! Ingrédient préparé ➔ ${result}`);
+      
+      const newScore = scoreRef.current + 5;
+      const newContrib = contribRef.current + 5;
+      scoreRef.current = newScore;
+      contribRef.current = newContrib;
+      setScore(newScore);
+      setMyContributions(newContrib);
+      setRecipeStep(3);
+      showAchievement(`✅ Découpe réussie ! (+5 pts) ➔ Mettre sur le Passe-Plats 🪟`);
+      addLog(`🔪 Découpe réussie (+5 pts) ➔ ${result}`);
+      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
       setMinigameData(null);
     } else {
       setMinigameData(prev => ({ ...prev, currentTaps: updatedTaps }));
     }
   };
 
+  // Independent Grease Fire Generator
   useEffect(() => {
     if (gameState !== 'playing' || !isHost) return;
     const fireInterval = setInterval(() => {
@@ -331,21 +408,27 @@ export default function App() {
       const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
       
       const currentSt = stationStates[randomStove.id] || {};
-      if (!currentSt.fire && Math.random() < 0.25) {
+      if (!currentSt.fire && Math.random() < 0.2) {
         syncStationUpdate(randomStove.id, { ...currentSt, fire: true, label: '🔥 FEU !' });
-        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Éteignez-le vite (🧯) !`);
+        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Éteignez-le (🧯) !`);
       }
-    }, 12000);
+    }, 15000);
     return () => clearInterval(fireInterval);
   }, [gameState, isHost, stationStates]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (gameState !== 'playing' || isHost) return;
+      if (gameState !== 'playing' || isHost || pausedTimer) return;
       const step = 4;
       if (congratsModal && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
+        // Advance to next recipe
+        const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
+        setActiveTicket(nextRecipe);
+        setRecipeStep(1);
         setCongratsModal(null);
+        setPausedTimer(false);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
         return;
       }
       if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
@@ -369,7 +452,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, minigameData, tempMinigame, congratsModal, stationStates]);
+  }, [gameState, isHost, minigameData, tempMinigame, congratsModal, pausedTimer, stationStates, activeTicket]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -406,7 +489,7 @@ export default function App() {
   }, [roomCode]);
 
   useEffect(() => {
-    if (gameState !== 'playing' || !endTime) return;
+    if (gameState !== 'playing' || !endTime || pausedTimer) return;
 
     const interval = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
@@ -426,7 +509,7 @@ export default function App() {
     }, 250);
 
     return () => clearInterval(interval);
-  }, [gameState, endTime, isHost, roomCode]);
+  }, [gameState, endTime, pausedTimer, isHost, roomCode]);
 
   const addLog = (msg) => {
     const newLogs = [msg, ...logs.slice(0, 20)];
@@ -444,6 +527,7 @@ export default function App() {
 
     setMyContributions(0);
     contribRef.current = 0;
+    setRecipeStep(1);
 
     if (db && roomCode) {
       update(ref(db, `rooms/${roomCode}`), {
@@ -486,7 +570,7 @@ export default function App() {
         status: 'waiting',
         score: 0,
         stations: {},
-        logs: [`👑 ${playerName} a ouvert la cuisine co-op ${code}`]
+        logs: [`👑 ${playerName} a ouvert la cuisine ${code}`]
       });
     }
   };
@@ -495,15 +579,28 @@ export default function App() {
     e.preventDefault();
     if (!roomCode) return;
     setIsHost(false);
+    
+    // Assign role automatically based on player count or choice
+    const assignedRole = Object.keys(players).length % 2 === 0 ? 'prep' : 'cook';
+    setMyRole(assignedRole);
+    if (assignedRole === 'prep') {
+      setPos({ x: 25, y: 50 });
+      posRef.current = { x: 25, y: 50 };
+    } else {
+      setPos({ x: 75, y: 50 });
+      posRef.current = { x: 75, y: 50 };
+    }
+
     setScreen('player_lobby');
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
         name: playerName,
         emoji: playerEmoji,
-        x: 50,
+        x: assignedRole === 'prep' ? 25 : 75,
         y: 50,
         item: '',
-        contributions: 0
+        contributions: 0,
+        role: assignedRole
       });
     }
   };
@@ -527,7 +624,7 @@ export default function App() {
         }
         @keyframes knifeChopping {
           0% { transform: rotate(0deg) translateY(0); }
-          50% { transform: rotate(-30deg) translateY(-8px); }
+          50% { transform: rotate(-35deg) translateY(-10px); }
           100% { transform: rotate(0deg) translateY(0); }
         }
         @keyframes fireAlarm {
@@ -539,11 +636,16 @@ export default function App() {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        @keyframes achievementSlide {
+          0% { transform: translateY(-30px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
         * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .knife-anim { animation: knifeChopping 0.25s ease-in-out infinite; }
+        .knife-anim { animation: knifeChopping 0.22s ease-in-out infinite; }
         .fire-anim { animation: fireAlarm 0.5s ease-in-out infinite; }
+        .achievement-card { animation: achievementSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .falling-emoji {
           position: fixed;
           top: -60px;
@@ -578,7 +680,7 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.5 🌶️</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.6 🌶️</h1>
             <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
@@ -655,7 +757,7 @@ export default function App() {
                 ) : (
                   Object.keys(players).map((pid) => (
                     <li key={pid} style={styles.playerItem}>
-                      <span style={{ fontWeight: '700', fontSize: '1.2rem' }}>{players[pid].emoji} {players[pid].name}</span>
+                      <span style={{ fontWeight: '700', fontSize: '1.2rem' }}>{players[pid].emoji} {players[pid].name} ({players[pid].role === 'prep' ? '🔪 Chef Gauche' : '🍲 Chef Droit'})</span>
                       <span style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>{players[pid].contributions || 0} pts</span>
                     </li>
                   ))
@@ -664,7 +766,7 @@ export default function App() {
             </div>
 
             <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>📜 Journal & Incidents de Cuisine</h3>
+              <h3 style={styles.panelTitle}>📜 Journal de Cuisine</h3>
               <div style={styles.logsBox}>
                 {logs.map((lg, idx) => (
                   <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') || lg.includes('FEU') ? '#ef4444' : '#e2e8f0' }}>{lg}</div>
@@ -699,17 +801,11 @@ export default function App() {
           <div style={styles.lobbyCard}>
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
             <h2 style={{ margin: '15px 0', fontSize: '1.8rem', fontWeight: '800' }}>{playerEmoji} {playerName}</h2>
+            <div style={styles.roleBadgeContainer}>
+              Rôle Attribué : <strong style={{ color: '#38bdf8' }}>{myRole === 'prep' ? '🔪 Chef Côté Gauche (Préparation)' : '🍲 Chef Côté Droit (Cuisson & Service)'}</strong>
+            </div>
             <div style={styles.spinner}></div>
             <p style={{ marginTop: '18px', color: '#e2e8f0', fontSize: '1.15rem', fontWeight: '700' }}>⏳ En attente du Chef Principal...</p>
-            
-            <div style={styles.instructionsBox}>
-              <h4 style={{ color: '#fbbf24', margin: '0 0 12px 0', fontSize: '1.15rem', fontWeight: '800' }}>🤝 Guide du Travail en Équipe :</h4>
-              <ol style={{ textAlign: 'left', fontSize: '0.95rem', color: '#e2e8f0', paddingLeft: '22px', margin: 0, lineHeight: '1.6' }}>
-                <li><strong>Chef Gauche (Prep) :</strong> Prenez l'ingrédient aux caisses, découpez-le (🔪) et posez-le sur le <strong>Passe-Plats Central (🪟)</strong>.</li>
-                <li><strong>Chef Droit (Cook & Serve) :</strong> Récupérez l'ingrédient du Passe-Plats, cuisez-le au Tagine (🍲 / 🫖) et servez (🛎️).</li>
-                <li><strong>Urgences :</strong> Si un tagine prend feu (🔥), utilisez l'extincteur (🧯) pour l'éteindre immédiatement.</li>
-              </ol>
-            </div>
           </div>
         </div>
       )}
@@ -727,36 +823,28 @@ export default function App() {
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
             <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff', fontSize: '1.1rem' }}>{timeLeft}s</strong></div>
+            <div style={styles.dishHeaderTitle}>🍲 Plat en cours : <span style={{ color: '#fbbf24' }}>{activeTicket.title}</span></div>
             <div style={styles.scoreBoard}>🪙 {score}</div>
             <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.6rem' }}>{heldItem || '➖'}</span></div>
           </header>
 
           <div style={styles.activeLayout}>
-            {/* Ticket & Teamwork Role Sidebar */}
-            <div style={styles.recipeSidebar}>
-              <h4 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '1.1rem', fontWeight: '800' }}>🎫 Ticket Actif :</h4>
-              <div style={styles.recipeCardItem}>
-                <div style={{ fontSize: '1.05rem', color: '#fff', fontWeight: '800', marginBottom: '8px' }}>{activeTicket.title}</div>
-                <div style={{ fontSize: '0.95rem', color: '#cbd5e1', lineHeight: '1.6' }}>
-                  1. Prep (Gauche) : 🔪 <strong>{activeTicket.requiredPrep}</strong><br/>
-                  2. Transit : 🪟 <strong>Passe-Plats</strong><br/>
-                  3. Cuisson/Service (Droite) : 🍲 <strong>{activeTicket.requiredCook}</strong><br/>
-                  Récompense : <span style={{ color: '#34d399', fontWeight: '800' }}>+{activeTicket.points} pts</span>
-                </div>
-              </div>
-
-              <h4 style={{ margin: '18px 0 10px 0', color: '#fbbf24', fontSize: '1.05rem', fontWeight: '800' }}>🤝 Rôles d'Équipe :</h4>
-              <div style={{ fontSize: '0.9rem', color: '#cbd5e1', lineHeight: '1.6' }}>
-                • <strong>Gauche (Prep) :</strong> Caisses + Planches 🔪<br/>
-                • <strong>Milieu :</strong> Passe-Plats 🪟 (Barrière)<br/>
-                • <strong>Droite (Cook) :</strong> Tagines 🍲 + Service 🛎️
-              </div>
-            </div>
-
             {/* Kitchen Floor with Center Barrier */}
             <div style={styles.kitchenFloor}>
               <div style={styles.barrierLine}></div>
-              <div style={styles.barrierLabel}>🪟 PASSE-PLATS CENTRAL</div>
+              <div style={styles.barrierLabel}>🪟 PASSE-PLATS CENTRAL (BARRIÈRE)</div>
+
+              {/* Achievement Notification Overlay on top */}
+              {achievementPopup && (
+                <div className="achievement-card" style={{
+                  ...styles.achievementBanner,
+                  background: achievementPopup.state === 'success' ? 'rgba(16, 185, 129, 0.95)' : 'rgba(30, 27, 75, 0.95)',
+                  borderColor: achievementPopup.state === 'success' ? '#34d399' : '#fbbf24'
+                }}>
+                  <span style={{ fontSize: '1.5rem' }}>{achievementPopup.state === 'success' ? '✅' : '🔔'}</span>
+                  <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff' }}>{achievementPopup.text}</span>
+                </div>
+              )}
 
               {STATIONS.map((st) => {
                 const stState = stationStates[st.id] || {};
@@ -813,31 +901,38 @@ export default function App() {
                   >
                     {pItem && <div style={styles.heldBubble}>{pItem}</div>}
                     <div style={{ fontSize: '2.4rem' }}>{p.emoji}</div>
-                    <div style={styles.playerTag}>{p.name}</div>
+                    <div style={styles.playerTag}>{p.name} ({p.role === 'prep' ? 'Gauche' : 'Droit'})</div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Congrats / Recipe Level-Up Overlay Modal */}
+          {/* Congrats / Recipe Level-Up Overlay Modal (Stops timer until continued) */}
           {congratsModal && (
             <div style={styles.minigameOverlay}>
               <div style={styles.congratsCard}>
                 <h2 style={{ color: '#10b981', fontSize: '2.4rem', margin: '0 0 12px 0', fontWeight: '900' }}>🎉 FÉLICITATIONS !</h2>
                 <p style={{ fontSize: '1.25rem', color: '#fff', margin: '8px 0', lineHeight: '1.5' }}>
-                  Vous avez servi <strong>{congratsModal.title}</strong> avec succès ! (+{congratsModal.points} pts)
+                  Vous avez servi <strong>{congratsModal.title}</strong> avec succès ! (+{congratsModal.earnedPts} pts)
                 </p>
                 <div style={styles.divider}></div>
-                <h4 style={{ color: '#fbbf24', margin: '12px 0 8px 0', fontSize: '1.2rem', fontWeight: '800' }}>📜 PROCHAINE COMMANDE & INSTRUCTIONS :</h4>
+                <h4 style={{ color: '#fbbf24', margin: '12px 0 8px 0', fontSize: '1.2rem', fontWeight: '800' }}>📜 CONTINUER AVEC VOTRE PROCHAIN REPAS :</h4>
                 <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '18px', borderRadius: '16px', margin: '12px 0', border: '1px solid rgba(255,255,255,0.15)' }}>
-                  <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#38bdf8', marginBottom: '8px' }}>{congratsModal.nextRecipe.title}</div>
+                  <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#38bdf8', marginBottom: '8px' }}>Préparez le prochain ticket ensemble !</div>
                   <div style={{ fontSize: '1.05rem', color: '#e2e8f0', lineHeight: '1.6' }}>
-                    {congratsModal.nextRecipe.hint}
+                    Le minuteur est en pause. Appuyez sur Espace ou Continuer pour lancer la suite.
                   </div>
                 </div>
-                <button onClick={() => setCongratsModal(null)} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
-                  CONTINUER LE SERVICE 🚀 (ESPACE)
+                <button onClick={() => {
+                  const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
+                  setActiveTicket(nextRecipe);
+                  setRecipeStep(1);
+                  setCongratsModal(null);
+                  setPausedTimer(false);
+                  if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
+                }} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
+                  CONTINUER AVEC VOTRE PROCHAIN REPAS 🚀 (ESPACE)
                 </button>
               </div>
             </div>
@@ -864,7 +959,7 @@ export default function App() {
           {tempMinigame && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
-                <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '1.5rem', fontWeight: '800' }}>🔥 Contrôle de Température Tagine !</h3>
+                <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '1.5rem', fontWeight: '800' }}>🔥 Contrôle de Température Pot !</h3>
                 <p style={{ fontSize: '1.05rem', color: '#cbd5e1', marginBottom: '12px' }}>Appuyez quand l'indicateur est dans la zone verte !</p>
                 
                 <div style={styles.tempBarContainer}>
@@ -931,7 +1026,7 @@ const styles = {
   subSubtitle: { fontSize: '1.5rem', color: '#e2e8f0', marginBottom: '25px', fontWeight: '800', textAlign: 'center' },
   menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '660px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   lobbyCard: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '35px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '580px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  instructionsBox: { marginTop: '18px', background: 'rgba(15, 23, 42, 0.8)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.12)' },
+  roleBadgeContainer: { background: 'rgba(15, 23, 42, 0.8)', padding: '12px 18px', borderRadius: '14px', margin: '15px 0', border: '1px solid rgba(255,255,255,0.15)', fontSize: '1.1rem' },
   resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
   hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.7)' },
   hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', background: 'rgba(30, 27, 75, 0.88)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.12)' },
@@ -961,13 +1056,13 @@ const styles = {
   gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
   headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700' },
+  dishHeaderTitle: { fontSize: '1.2rem', fontWeight: '800', background: 'rgba(245, 158, 11, 0.15)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.35)' },
   scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)' },
   activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '12px', gap: '12px' },
-  recipeSidebar: { width: '280px', background: '#111827', border: '1px solid #1f2937', borderRadius: '18px', padding: '18px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflowY: 'auto' },
-  recipeCardItem: { background: 'rgba(30, 41, 59, 0.8)', padding: '14px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)' },
   kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '18px', border: '2px dashed #334155', overflow: 'hidden' },
-  barrierLine: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: '4px', background: 'rgba(236, 72, 153, 0.35)', transform: 'translateX(-50%)', borderStyle: 'dashed', borderColor: '#ec4899' },
+  barrierLine: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: '4px', background: 'rgba(236, 72, 153, 0.4)', transform: 'translateX(-50%)', borderStyle: 'dashed', borderColor: '#ec4899' },
   barrierLabel: { position: 'absolute', left: '50%', top: '12px', transform: 'translateX(-50%)', background: '#1e1b4b', padding: '6px 14px', borderRadius: '10px', fontSize: '0.8rem', color: '#ec4899', fontWeight: '900', border: '1px solid #ec4899', zIndex: 5 },
+  achievementBanner: { position: 'absolute', top: '55px', left: '50%', transform: 'translateX(-50%)', padding: '10px 22px', borderRadius: '14px', border: '2px solid', display: 'flex', alignItems: 'center', gap: '12px', zIndex: 20, boxShadow: '0 10px 25px rgba(0,0,0,0.6)' },
   station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '90px', height: '90px', borderRadius: '22px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 30px rgba(0,0,0,0.6)', border: '2.5px solid rgba(255,255,255,0.3)' },
   stationLabel: { fontSize: '0.7rem', fontWeight: '800', color: '#fff', marginTop: '3px', textShadow: '0 1px 4px rgba(0,0,0,0.9)', textAlign: 'center' },
   stationItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#334155', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.15rem', border: '2.5px solid #fbbf24', boxShadow: '0 2px 8px rgba(0,0,0,0.5)' },
