@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.3-zellige";
+const APP_VERSION = "v11.4-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -158,7 +158,6 @@ export default function App() {
   const [currentWorldIndex, setCurrentWorldIndex] = useState(0);
   const worldConfig = WORLDS_CONFIG[currentWorldIndex];
 
-  // Persistent world items (they remain visible on platforms)
   const [worldItems, setWorldItems] = useState(worldConfig.items);
   const [stationState, setStationState] = useState({
     cuttingBoardItem: null,
@@ -171,7 +170,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.3 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.4 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Portal Transition State
@@ -426,6 +425,7 @@ export default function App() {
         setTimeout(() => {
           const nextWorldIdx = (currentWorldIndex + 1) % WORLDS_CONFIG.length;
           const nextCfg = WORLDS_CONFIG[nextWorldIdx];
+          
           setCurrentWorldIndex(nextWorldIdx);
           setWorldItems(nextCfg.items);
           itemsRef.current = nextCfg.items;
@@ -486,7 +486,7 @@ export default function App() {
       return;
     }
 
-    // 4. World Pickup (Persistent items - they remain visible on platforms)
+    // 4. World Pickup (Robust Emoji Normalization)
     if (!curHolding) {
       let pickedItem = null;
       itemsRef.current.forEach(item => {
@@ -501,8 +501,8 @@ export default function App() {
       });
 
       if (pickedItem) {
-        const cleanedPicked = (pickedItem?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
-        const cleanedTarget = (step?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+        const cleanedPicked = (pickedItem?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
+        const cleanedTarget = (step?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
 
         if (step && step.id === 'pickup' && cleanedPicked === cleanedTarget) {
           updateHolding(pickedItem.type, 'raw');
@@ -725,8 +725,8 @@ export default function App() {
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
     const foundItem = worldItems.find(i => {
-      const cleanedI = (i?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
-      const cleanedT = (currentStepObj?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+      const cleanedI = (i?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
+      const cleanedT = (currentStepObj?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
       return cleanedI === cleanedT;
     });
     targetWorldX = foundItem ? foundItem.x : 220;
@@ -844,7 +844,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.3)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.4)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1192,8 +1192,8 @@ export default function App() {
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
-              const cleanedItem = (item?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
-              const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+              const cleanedItem = (item?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
+              const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
               const isTargetItem = currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget;
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
