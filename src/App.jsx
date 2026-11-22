@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v5.2";
+const APP_VERSION = "v5.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -23,7 +23,6 @@ const RANDOM_NAMES = [
 
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
-// Expanded 2400px wide world platforms
 const WORLD_WIDTH = 2400;
 const PLATFORMS = [
   { x: 180, y: 360, w: 180, h: 24 },
@@ -35,33 +34,15 @@ const PLATFORMS = [
   { x: 1880, y: 310, w: 240, h: 24 }
 ];
 
-// Sprite sheet coordinates based on 6 columns x 5 rows layout
 const SPRITE_FRAMES = {
-  idle: [
-    { col: 0, row: 0 },
-    { col: 1, row: 0 },
-    { col: 2, row: 0 },
-    { col: 3, row: 0 }
-  ],
-  run: [
-    { col: 0, row: 2 },
-    { col: 1, row: 2 },
-    { col: 2, row: 2 },
-    { col: 3, row: 2 }
-  ],
-  jump: [
-    { col: 0, row: 3 },
-    { col: 1, row: 3 },
-    { col: 2, row: 3 }
-  ]
+  idle: [{ col: 0, row: 0 }, { col: 1, row: 0 }, { col: 2, row: 0 }, { col: 3, row: 0 }],
+  run: [{ col: 0, row: 2 }, { col: 1, row: 2 }, { col: 2, row: 2 }, { col: 3, row: 2 }],
+  jump: [{ col: 0, row: 3 }, { col: 1, row: 3 }, { col: 2, row: 3 }]
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
   const frames = SPRITE_FRAMES[anim] || SPRITE_FRAMES.idle;
   const currentFrame = frames[frameTick % frames.length];
-
-  // 6 columns (0..5 -> 0%, 20%, 40%, 60%, 80%, 100%)
-  // 5 rows (0..4 -> 0%, 25%, 50%, 75%, 100%)
   const posX = currentFrame.col * 20;
   const posY = currentFrame.row * 25;
 
@@ -90,7 +71,7 @@ export default function App() {
 
   const [players, setPlayers] = useState({});
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.2 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.3 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [pos, setPos] = useState({ x: 120, y: 450 });
@@ -118,14 +99,12 @@ export default function App() {
     }));
   }, []);
 
-  // Track window resize for camera centering
   useEffect(() => {
     const handleResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Sprite animation frame ticker
   useEffect(() => {
     if (gameState !== 'playing') return;
     const animTimer = setInterval(() => {
@@ -154,7 +133,6 @@ export default function App() {
     }
   };
 
-  // Platformer physics loop
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
 
@@ -216,7 +194,6 @@ export default function App() {
         currentAnim = 'jump';
       }
 
-      // World boundaries
       if (px < 0) px = 0;
       if (px > WORLD_WIDTH - spriteSize) px = WORLD_WIDTH - spriteSize;
 
@@ -237,7 +214,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [gameState, isHost]);
 
-  // Keyboard controls & Double Jump
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing' || isHost) return;
@@ -263,7 +239,6 @@ export default function App() {
     };
   }, [gameState, isHost]);
 
-  // Firebase sync
   useEffect(() => {
     if (!db || !roomCode) return;
     const roomRef = ref(db, `rooms/${roomCode}`);
@@ -319,7 +294,6 @@ export default function App() {
     }
   };
 
-  // Calculate camera offset to keep local player centered in viewport
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w, pos.x - viewport.w / 2 + 28));
 
   return (
@@ -351,7 +325,6 @@ export default function App() {
         </div>
       )}
 
-      {/* HOME SCREEN */}
       {screen === 'home' && (
         <div style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
@@ -363,7 +336,6 @@ export default function App() {
         </div>
       )}
 
-      {/* MODE SELECT */}
       {screen === 'mode_select' && (
         <div style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
@@ -387,7 +359,6 @@ export default function App() {
         </div>
       )}
 
-      {/* HOST LOBBY */}
       {isHost && (
         <div style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
@@ -415,7 +386,6 @@ export default function App() {
         </div>
       )}
 
-      {/* PLAYER LOBBY */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div style={styles.centeredWrapper}>
           <div style={styles.menuBox}>
@@ -429,16 +399,13 @@ export default function App() {
         </div>
       )}
 
-      {/* ACTIVE GAME SCREEN WITH PLAYER-CENTERED CAMERA */}
       {!isHost && gameState === 'playing' && (
         <div style={styles.gameContainer}>
-          {/* HUD Info */}
           <div style={styles.hudBar}>
             <span>📍 Position: {Math.round(pos.x)}m</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
           </div>
 
-          {/* Scrolling World Container */}
           <div
             style={{
               ...styles.worldLayer,
@@ -446,45 +413,46 @@ export default function App() {
               transform: `translateX(-${cameraX}px)`
             }}
           >
-            {/* Parallax Clouds & Scenery */}
             <div style={{ ...styles.cloud, left: '150px', top: '60px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '620px', top: '90px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
 
-            {/* Decorative Bushes */}
             <div style={{ ...styles.bush, left: '80px', width: '110px' }} />
             <div style={{ ...styles.bush, left: '650px', width: '140px' }} />
             <div style={{ ...styles.bush, left: '1220px', width: '120px' }} />
             <div style={{ ...styles.bush, left: '1850px', width: '160px' }} />
 
-            {/* Platforms */}
             {PLATFORMS.map((p, idx) => (
               <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` }} />
             ))}
 
-            {/* Ground */}
             <div style={styles.ground} />
 
-            {/* Render All Players */}
-            {Object.keys(players).map(pid => {
-              const p = players[pid];
-              const isMe = pid === myId;
-              const px = isMe ? pos.x : (p.x || 120);
-              const py = isMe ? pos.y : (p.y || 450);
-              const pAnim = isMe ? animState : (p.anim || 'idle');
-              const pFacing = isMe ? facingRight : (p.facingRight !== undefined ? p.facingRight : true);
+            {/* Local Player Render */}
+            <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
+              <div style={{ ...styles.tag, border: '1.5px solid #fbbf24' }}>{playerName}</div>
+              <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} />
+            </div>
 
-              return (
-                <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
-                  <div style={{ ...styles.tag, border: isMe ? '1.5px solid #fbbf24' : 'none' }}>
-                    {p.name || playerName}
+            {/* Remote Players Render (Filtered out local player to fix double rendering) */}
+            {Object.keys(players)
+              .filter(pid => pid !== myId)
+              .map(pid => {
+                const p = players[pid];
+                const px = p.x || 120;
+                const py = p.y || 450;
+                const pAnim = p.anim || 'idle';
+                const pFacing = p.facingRight !== undefined ? p.facingRight : true;
+
+                return (
+                  <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
+                    <div style={styles.tag}>{p.name}</div>
+                    <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} />
                   </div>
-                  <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} />
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}
@@ -514,7 +482,8 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh', transition: 'transform 0.05s linear' },
+  hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: '50', display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' }, // Removed transition to eliminate jitter
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
   bush: { position: 'absolute', bottom: '80px', height: '36px', background: '#4ade80', border: '3px solid #16a34a', borderRadius: '12px 12px 0 0' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
