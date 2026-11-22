@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.2";
+const APP_VERSION = "v6.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -44,12 +44,12 @@ const STATIONS = {
   counter: { x: 1700, y: 0 }
 };
 
-// Corrected pixel coordinates for Chef W2.png (fall is the precise parachute frame on row 1)
+// Verified full-body sprite sheet coordinates
 const SPRITE_STATES = {
-  idle: [{ x: 35, y: 18, w: 34, h: 42 }],
-  run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }],
-  jump: [{ x: 28, y: 160, w: 42, h: 38 }],
-  fall: [{ x: 224, y: 12, w: 48, h: 48 }]
+  idle: [{ x: 35, y: 15, w: 34, h: 45 }],
+  run: [{ x: 35, y: 110, w: 36, h: 45 }, { x: 74, y: 110, w: 36, h: 45 }],
+  jump: [{ x: 28, y: 155, w: 42, h: 42 }],
+  fall: [{ x: 35, y: 15, w: 34, h: 45 }]
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
@@ -103,7 +103,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.2 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.3 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
