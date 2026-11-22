@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.5-zellige";
+const APP_VERSION = "v9.6-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.5 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.6 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -284,7 +284,6 @@ export default function App() {
       } else {
         setScore(prev => Math.max(0, prev - 15));
         triggerAchievement("❌ Coupe ratée ! -15 pts (Réessaie sur la planche)", 'error', 3500);
-        // Reset cutting board state so player isn't stuck looping
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -305,7 +304,6 @@ export default function App() {
       } else {
         setScore(prev => Math.max(0, prev - 15));
         triggerAchievement("❌ Température incorrecte ! -15 pts (Réessaie dans le pot)", 'error', 3500);
-        // Reset pot state so player isn't stuck
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -663,7 +661,7 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  // Calculate direction for golden guidance arrow
+  // Calculate target X position for screen-edge directional compass
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
@@ -676,7 +674,8 @@ export default function App() {
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = STATIONS.counter.x;
   }
-  const isTargetToRight = targetWorldX > pos.x;
+  const isTargetToRight = targetWorldX > pos.x + 40;
+  const isTargetToLeft = targetWorldX < pos.x - 40;
 
   return (
     <div style={styles.appContainer}>
@@ -737,7 +736,7 @@ export default function App() {
         }
         @keyframes goldenPulse {
           0% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
-          50% { transform: scale(1.15); filter: drop-shadow(0 0 12px #fbbf24); }
+          50% { transform: scale(1.15); filter: drop-shadow(0 0 14px #fbbf24); }
           100% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
         }
         .golden-glow-item {
@@ -760,7 +759,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.5)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.6)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -838,6 +837,18 @@ export default function App() {
             <span>🎒 En main: {holdingItem ? `${holdingItem} (${holdingState})` : 'Aucun'}</span>
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
+
+          {/* Off-Screen Directional Compass / Indicator */}
+          {isTargetToLeft && (
+            <div style={styles.compassLeft}>
+              <span style={{ fontSize: '1.4rem' }}>⬅️ 🌟</span> Direction Objectif
+            </div>
+          )}
+          {isTargetToRight && (
+            <div style={styles.compassRight}>
+              Direction Objectif <span style={{ fontSize: '1.4rem' }}>🌟 ➡️</span>
+            </div>
+          )}
 
           {/* Achievement Popup Banner */}
           {achievementBanner.visible && (
@@ -1053,7 +1064,7 @@ export default function App() {
                     left: `${item.x}px`,
                     top: `${itemTop}px`,
                     fontSize: '1.8rem',
-                    filter: isTargetItem ? 'drop-shadow(0 0 10px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
+                    filter: isTargetItem ? 'drop-shadow(0 0 12px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
                     transform: 'translateX(-50%)'
                   }}
                 >
@@ -1064,11 +1075,8 @@ export default function App() {
 
             <div style={styles.ground} />
 
-            {/* Local Player Render with Directional Guidance Arrow */}
+            {/* Local Player Render (Cleaned up, no hovering arrow above head) */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
-              <div className="holding-arrow" style={{ position: 'absolute', top: '-60px', fontSize: '1.5rem', color: '#fbbf24', fontWeight: '900' }}>
-                {isTargetToRight ? '➡️ 🌟' : '🌟 ⬅️'}
-              </div>
               {holdingItem && (
                 <div className="holding-arrow" style={styles.holdingIndicator}>
                   ▼ {holdingItem} ({holdingState})
@@ -1129,6 +1137,8 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  compassLeft: { position: 'fixed', left: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid #fbbf24', color: '#fbbf24', padding: '10px 16px', borderRadius: '12px', fontWeight: '900', zIndex: 50, boxShadow: '0 4px 15px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', gap: '8px' },
+  compassRight: { position: 'fixed', right: '20px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid #fbbf24', color: '#fbbf24', padding: '10px 16px', borderRadius: '12px', fontWeight: '900', zIndex: 50, boxShadow: '0 4px 15px rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', gap: '8px' },
   touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
   touchDpad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
   touchActionPad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
@@ -1147,7 +1157,7 @@ const styles = {
   ground: { position: 'absolute', bottom: '0', left: '0', width: '100%', height: '28px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 12px, #78350f 12px, #78350f 24px)', borderTop: '4px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
-  holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
+  holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.80rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
   stationStand: { width: '70px', height: '36px', background: '#78350f', border: '3px solid #451a03', borderRadius: '8px', position: 'relative', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' },
   cuttingBoardTop: { position: 'absolute', top: '-10px', left: '6px', width: '54px', height: '14px', background: '#d97706', border: '2px solid #b45309', borderRadius: '4px' }
 };
