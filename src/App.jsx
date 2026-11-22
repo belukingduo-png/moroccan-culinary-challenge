@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.0-zellige";
+const APP_VERSION = "v11.1-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -38,7 +38,7 @@ const WORLD_1_PLATFORMS = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-// World 2 Platform Layout (Night Sky Twilight World - different heights & positions!)
+// World 2 Platform Layout (Night Sky Twilight World)
 const WORLD_2_PLATFORMS = [
   { x: 220, offsetFromGround: 170, w: 200, h: 24 },
   { x: 520, offsetFromGround: 250, w: 180, h: 24 },
@@ -170,7 +170,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.0 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.1 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Portal Transition State
@@ -853,7 +853,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.0)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.1)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
