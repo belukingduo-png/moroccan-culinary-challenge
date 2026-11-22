@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
+import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v3.8";
+const APP_VERSION = "v3.9";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -23,7 +23,7 @@ const STATIONS = [
   { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 48, color: '#f97316', zone: 'prep' },
   { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 71, color: '#eab308', zone: 'prep' },
   { id: 'crate_mint', icon: '🌿', type: 'crate', item: '🌿', label: 'Caisse Menthe', x: 12, y: 92, color: '#22c55e', zone: 'prep' },
-  { id: 'board_1', icon: '🔪', type: 'board', label: 'Poste Découpe', x: 34, y: 50, color: '#3b82f6', zone: 'prep' },
+  { id: 'board_1', icon: '🔪', type: 'board', label: 'Poste Découpe', x: 32, y: 50, color: '#3b82f6', zone: 'prep' },
 
   // Center Barrier Bridge
   { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 50, color: '#ec4899', zone: 'barrier' },
@@ -58,17 +58,17 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.8 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.9 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
-  const [myRole, setMyRole] = useState('prep'); 
+  const [myRole, setMyRole] = useState('prep');
   const [pos, setPos] = useState({ x: 25, y: 50 });
   const [heldItem, setHeldItem] = useState('');
   const [myContributions, setMyContributions] = useState(0);
 
   const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
-  const [recipeStep, setRecipeStep] = useState(1); // 1: Take, 2: Cut, 3: Pass, 4: Cook, 5: Serve
+  const [recipeStep, setRecipeStep] = useState(1);
   const [stationStates, setStationStates] = useState({});
   const [minigameData, setMinigameData] = useState(null);
   const [tempMinigame, setTempMinigame] = useState(null);
@@ -80,6 +80,7 @@ export default function App() {
   const heldRef = useRef('');
   const contribRef = useRef(0);
   const scoreRef = useRef(0);
+  const roleRef = useRef('prep');
 
   const backgroundParticles = useMemo(() => {
     return [...Array(18)].map((_, i) => ({
@@ -120,7 +121,7 @@ export default function App() {
         y: newPos.y,
         item: newItem,
         contributions: newContrib,
-        role: myRole
+        role: roleRef.current
       });
     }
   };
@@ -131,11 +132,11 @@ export default function App() {
     let nextX = posRef.current.x + dx;
     let nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
 
-    // Strict barrier: Prep side (left) cannot exceed x=48, Cook side (right) cannot go below x=52
-    if (myRole === 'prep') {
-      nextX = Math.max(6, Math.min(48, nextX));
+    // Strict barrier: Prep side (left) cannot exceed x=46, Cook side (right) cannot go below x=54
+    if (roleRef.current === 'prep') {
+      nextX = Math.max(6, Math.min(46, nextX));
     } else {
-      nextX = Math.max(52, Math.min(95, nextX));
+      nextX = Math.max(54, Math.min(95, nextX));
     }
 
     const updated = { x: nextX, y: nextY };
@@ -147,7 +148,13 @@ export default function App() {
   const interactStation = () => {
     if (gameState !== 'playing' || isHost || pausedTimer) return;
     const { x, y } = posRef.current;
-    const nearby = STATIONS.find(s => Math.hypot(s.x - x, s.y - y) < 18);
+
+    // Pick the closest station within reach (gives pass_counter generous reach across barrier)
+    const nearby = STATIONS
+      .map(s => ({ ...s, dist: Math.hypot(s.x - x, s.y - y) }))
+      .filter(s => s.dist < (s.type === 'pass' ? 22 : 16))
+      .sort((a, b) => a.dist - b.dist)[0];
+
     if (!nearby) return;
 
     let currentItem = heldRef.current;
@@ -183,7 +190,7 @@ export default function App() {
 
     // 1. Crate: Take Ingredient (Prep side)
     if (nearby.type === 'crate' && currentItem === '') {
-      if (myRole !== 'prep') {
+      if (roleRef.current !== 'prep') {
         addLog(`⚠️ C'est le côté préparation (Chef Gauche) !`);
         return;
       }
@@ -211,7 +218,7 @@ export default function App() {
     } 
     // 2. Cutting Board (Prep side)
     else if (nearby.type === 'board') {
-      if (myRole !== 'prep') {
+      if (roleRef.current !== 'prep') {
         addLog(`⚠️ Le poste de découpe est réservé au Chef Gauche !`);
         return;
       }
@@ -240,7 +247,7 @@ export default function App() {
     } 
     // 3. Stoves / Pots (Cook side)
     else if (nearby.type === 'stove') {
-      if (myRole !== 'cook') {
+      if (roleRef.current !== 'cook') {
         addLog(`⚠️ La cuisson est réservée au Chef Droit !`);
         return;
       }
@@ -270,7 +277,7 @@ export default function App() {
         });
       }
     }
-    // 4. Central Pass Counter (Barrier bridge)
+    // 4. Central Pass Counter (Barrier bridge - works from both sides!)
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
@@ -289,13 +296,15 @@ export default function App() {
         heldRef.current = '';
         setHeldItem('');
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
+        updateAchievement(`✅ Posé sur le Passe-Plats 🪟`, true);
+        setTimeout(() => updateAchievement(`Chef Droit : Récupérer & Cuire 🍲`), 1600);
         addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté !`);
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
     // 5. Serving Counter (Cook side)
     else if (nearby.type === 'serve') {
-      if (myRole !== 'cook') {
+      if (roleRef.current !== 'cook') {
         addLog(`⚠️ Le service est réservé au Chef Droit !`);
         return;
       }
@@ -434,7 +443,7 @@ export default function App() {
         const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
         setActiveTicket(nextRecipe);
         setRecipeStep(1);
-        updateAchievement(`Prendre ${nextRecipe.requiredItem} ${nextRecipe.requiredItem === '🍅' ? '🍅' : nextRecipe.requiredItem === '🍗' ? '🍗' : '🌿'}`);
+        updateAchievement(`Prendre ${nextRecipe.requiredItem}`);
         setCongratsModal(null);
         setPausedTimer(false);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
@@ -575,6 +584,7 @@ export default function App() {
     setRoomCode(code);
     setIsHost(true);
     setMyRole('prep');
+    roleRef.current = 'prep';
     setPos({ x: 25, y: 50 });
     posRef.current = { x: 25, y: 50 };
     setScreen('host_lobby');
@@ -588,16 +598,26 @@ export default function App() {
     }
   };
 
-  const joinRoom = (e) => {
+  const joinRoom = async (e) => {
     e.preventDefault();
     if (!roomCode) return;
     setIsHost(false);
-    
-    // Auto assign role based on existing players in room
-    const currentPlayersCount = Object.keys(players).length;
-    const assignedRole = currentPlayersCount === 0 ? 'prep' : 'cook';
+
+    let assignedRole = 'prep';
+    if (db) {
+      try {
+        const snap = await get(ref(db, `rooms/${roomCode}/players`));
+        const existingPlayers = snap.val() || {};
+        const hasPrep = Object.values(existingPlayers).some(p => p.role === 'prep');
+        assignedRole = hasPrep ? 'cook' : 'prep';
+      } catch (err) {
+        console.warn("Role check fallback:", err);
+      }
+    }
+
     setMyRole(assignedRole);
-    const startX = assignedRole === 'prep' ? 25 : 75;
+    roleRef.current = assignedRole;
+    const startX = assignedRole === 'prep' ? 22 : 78;
     setPos({ x: startX, y: 50 });
     posRef.current = { x: startX, y: 50 };
 
@@ -690,7 +710,7 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.8 🌶️</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.9 🌶️</h1>
             <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
@@ -831,10 +851,19 @@ export default function App() {
       {/* ACTIVE GAMEPLAY SCREEN */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
+          {/* Independent 3-column grid header so timer digit width never shifts center or right elements */}
           <header style={styles.header}>
-            <div style={styles.headerItem}>⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff', fontSize: '1.1rem' }}>{timeLeft}s</strong></div>
-            <div style={styles.dishHeaderTitle}>🍲 Plat en cours : <span style={{ color: '#fbbf24' }}>{activeTicket.title}</span></div>
-            <div style={styles.headerRightGroup}>
+            <div style={{ justifySelf: 'start' }}>
+              <div style={styles.timerBox}>
+                ⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff', fontSize: '1.1rem', fontVariantNumeric: 'tabular-nums' }}>{timeLeft}s</strong>
+              </div>
+            </div>
+
+            <div style={{ justifySelf: 'center' }}>
+              <div style={styles.dishHeaderTitle}>🍲 Plat en cours : <span style={{ color: '#fbbf24' }}>{activeTicket.title}</span></div>
+            </div>
+
+            <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={styles.scoreBoard}>🪙 {score}</div>
               <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.6rem' }}>{heldItem || '➖'}</span></div>
             </div>
@@ -938,7 +967,7 @@ export default function App() {
                   const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
                   setActiveTicket(nextRecipe);
                   setRecipeStep(1);
-                  updateAchievement(`Prendre ${nextRecipe.requiredItem} ${nextRecipe.requiredItem === '🍅' ? '🍅' : nextRecipe.requiredItem === '🍗' ? '🍗' : '🌿'}`);
+                  updateAchievement(`Prendre ${nextRecipe.requiredItem}`);
                   setCongratsModal(null);
                   setPausedTimer(false);
                   if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
@@ -1065,11 +1094,11 @@ const styles = {
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   countdownText: { fontSize: '6rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 50px rgba(251, 191, 36, 0.7)', textAlign: 'center' },
   gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
-  header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
+  header: { display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
+  timerBox: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700', width: '96px', textAlign: 'center', boxSizing: 'border-box' },
   headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700' },
-  headerRightGroup: { display: 'flex', alignItems: 'center', gap: '12px' },
-  dishHeaderTitle: { fontSize: '1.2rem', fontWeight: '800', background: 'rgba(245, 158, 11, 0.15)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.35)' },
-  scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)' },
+  dishHeaderTitle: { fontSize: '1.2rem', fontWeight: '800', background: 'rgba(245, 158, 11, 0.15)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.35)', whiteSpace: 'nowrap' },
+  scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)', fontVariantNumeric: 'tabular-nums' },
   activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '12px', gap: '12px' },
   kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '18px', border: '2px dashed #334155', overflow: 'hidden' },
   barrierLine: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: '4px', background: 'rgba(236, 72, 153, 0.4)', transform: 'translateX(-50%)', borderStyle: 'dashed', borderColor: '#ec4899' },
