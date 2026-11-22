@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.6";
+const APP_VERSION = "v8.7";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.6 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.7 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -254,29 +254,22 @@ export default function App() {
 
   const triggerQuestFeedback = (status, nextStepVal = null) => {
     setBannerStatus(status);
-    if (status === 'success') {
+    setTimeout(() => {
+      setBannerFading(true);
       setTimeout(() => {
-        setBannerFading(true);
-        setTimeout(() => {
-          if (nextStepVal !== null) {
-            updateQuestStep(nextStepVal);
-          }
-          setBannerStatus('neutral');
-          setBannerFading(false);
-        }, 300);
-      }, 500);
-    } else if (status === 'error') {
-      setScore(prev => Math.max(0, prev - 20));
-      setTimeout(() => {
+        if (nextStepVal !== null) {
+          updateQuestStep(nextStepVal);
+        }
         setBannerStatus('neutral');
-      }, 800);
-    }
+        setBannerFading(false);
+      }, 250);
+    }, 600);
   };
 
   const resolveMinigame = () => {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
-    const isGood = posVal >= 38 && posVal <= 62;
+    const isGood = posVal >= 35 && posVal <= 65;
 
     if (activeMinigame.type === 'cut') {
       if (isGood) {
@@ -357,8 +350,6 @@ export default function App() {
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
 
-    console.log("Space Action Triggered:", { curStep, curHolding, curState });
-
     // 1. Serving Counter (Step 3)
     if (Math.abs(px - STATIONS.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
       if (curHolding && curState === 'cooked' && curStep === 3) {
@@ -433,7 +424,7 @@ export default function App() {
         itemsRef.current = remainingItems;
         setWorldItems(remainingItems);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
-        triggerQuestFeedback('success', 1); // Advance directly to Step 1
+        triggerQuestFeedback('success', 1); // Step 1: Cutting
       }
     }
   };
@@ -912,7 +903,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* 3 - 2 - 1 Countdown Overlay */}
+          {/* Fully Opaque 3 - 2 - 1 Countdown Overlay */}
           {countdown !== null && (
             <div style={styles.countdownOverlay}>
               <div key={countdown} className="countdown-num" style={styles.countdownText}>
@@ -1117,12 +1108,12 @@ const styles = {
   touchDpad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
   touchActionPad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
   touchBtn: { width: '64px', height: '64px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: '1.5rem', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', outline: 'none', WebkitTapHighlightColor: 'transparent' },
-  countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  countdownOverlay: { position: 'fixed', inset: 0, background: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   countdownText: { fontSize: '7rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 8px 30px rgba(0,0,0,0.6)' },
   minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90 },
   minigameBox: { background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '24px', padding: '32px 40px', width: '90%', maxWidth: '460px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' },
   sliderTrack: { width: '100%', height: '32px', background: '#0f172a', borderRadius: '16px', border: '2px solid rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden', marginBottom: '20px' },
-  sweetSpot: { position: 'absolute', left: '38%', width: '24%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
+  sweetSpot: { position: 'absolute', left: '35%', width: '30%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
   sliderCursor: { position: 'absolute', top: '-2px', transform: 'translateX(-50%)', fontSize: '1.6rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' },
   minigameActionBtn: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '12px 24px', fontSize: '1.1rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
