@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.4";
+const APP_VERSION = "v6.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -102,7 +102,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.4 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.5 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -460,9 +460,10 @@ export default function App() {
   };
 
   const floorY = viewport.h - GROUND_HEIGHT;
-  const zoom = 1.5;
-  // Perfectly center camera on player position
+  const zoom = 1.35;
+  // Properly center camera horizontally and vertically around the player
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
+  const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 40));
 
   return (
     <div style={styles.appContainer}>
@@ -604,7 +605,7 @@ export default function App() {
             style={{
               ...styles.worldLayer,
               width: `${WORLD_WIDTH}px`,
-              transform: `scale(${zoom}) translateX(-${cameraX}px)`,
+              transform: `scale(${zoom}) translate(-${cameraX}px, -${cameraY}px)`,
               transformOrigin: 'top left'
             }}
           >
@@ -630,7 +631,7 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Station (No text, pure board graphic + conditional chopping animation) */}
+            {/* Cutting Board Station */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 25}px`, top: `${floorY - STATIONS.cuttingBoard.y - 20}px`, textAlign: 'center' }}>
               <div style={styles.cuttingBoardGraphic} />
               {stationState.cuttingBoardItem && (
@@ -641,7 +642,7 @@ export default function App() {
               )}
             </div>
 
-            {/* Cooking Pot Station (Big pot image emoji, boils only when cooking) */}
+            {/* Cooking Pot Station */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 30}px`, top: `${floorY - STATIONS.pot.y - 40}px`, textAlign: 'center' }}>
               <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
                 🍲
