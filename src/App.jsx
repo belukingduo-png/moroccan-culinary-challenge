@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.0-zellige";
+const APP_VERSION = "v12.1-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -27,7 +27,7 @@ const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 28;
 const HITBOX_HALF_W = 16;
 
-// Platform Layouts across 5 Worlds
+// Completely Unique Platform Layouts for Each of the 5 Worlds (No Repetition)
 const PLATFORMS_W1 = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
@@ -39,39 +39,36 @@ const PLATFORMS_W1 = [
 ];
 
 const PLATFORMS_W2 = [
-  { x: 220, offsetFromGround: 170, w: 200, h: 24 },
-  { x: 520, offsetFromGround: 250, w: 180, h: 24 },
-  { x: 800, offsetFromGround: 150, w: 220, h: 24 },
-  { x: 1100, offsetFromGround: 280, w: 190, h: 24 },
-  { x: 1400, offsetFromGround: 190, w: 200, h: 24 },
-  { x: 1700, offsetFromGround: 240, w: 220, h: 24 }
+  { x: 220, offsetFromGround: 280, w: 160, h: 24 }, // High vertical climb start!
+  { x: 500, offsetFromGround: 140, w: 180, h: 24 },
+  { x: 780, offsetFromGround: 320, w: 150, h: 24 }, // Very high jump challenge
+  { x: 1060, offsetFromGround: 180, w: 200, h: 24 },
+  { x: 1380, offsetFromGround: 290, w: 190, h: 24 },
+  { x: 1700, offsetFromGround: 210, w: 220, h: 24 }
 ];
 
 const PLATFORMS_W3 = [
-  { x: 200, offsetFromGround: 150, w: 190, h: 24 },
-  { x: 480, offsetFromGround: 240, w: 210, h: 24 },
-  { x: 760, offsetFromGround: 160, w: 200, h: 24 },
-  { x: 1040, offsetFromGround: 270, w: 180, h: 24 },
-  { x: 1320, offsetFromGround: 180, w: 220, h: 24 },
-  { x: 1620, offsetFromGround: 250, w: 200, h: 24 }
+  { x: 200, offsetFromGround: 120, w: 220, h: 24 }, // Close and easy start
+  { x: 520, offsetFromGround: 120, w: 220, h: 24 }, // Stepping stones close together
+  { x: 840, offsetFromGround: 200, w: 200, h: 24 },
+  { x: 1160, offsetFromGround: 150, w: 210, h: 24 },
+  { x: 1500, offsetFromGround: 280, w: 230, h: 24 }
 ];
 
 const PLATFORMS_W4 = [
-  { x: 250, offsetFromGround: 190, w: 180, h: 24 },
-  { x: 550, offsetFromGround: 260, w: 200, h: 24 },
-  { x: 850, offsetFromGround: 160, w: 210, h: 24 },
-  { x: 1150, offsetFromGround: 240, w: 190, h: 24 },
-  { x: 1450, offsetFromGround: 180, w: 220, h: 24 },
-  { x: 1750, offsetFromGround: 270, w: 200, h: 24 }
+  { x: 240, offsetFromGround: 350, w: 140, h: 24 }, // Extreme skyscraper climb in the void!
+  { x: 580, offsetFromGround: 220, w: 180, h: 24 },
+  { x: 920, offsetFromGround: 310, w: 160, h: 24 },
+  { x: 1260, offsetFromGround: 180, w: 200, h: 24 },
+  { x: 1600, offsetFromGround: 290, w: 190, h: 24 }
 ];
 
 const PLATFORMS_W5 = [
-  { x: 200, offsetFromGround: 160, w: 200, h: 24 },
-  { x: 500, offsetFromGround: 240, w: 190, h: 24 },
-  { x: 780, offsetFromGround: 180, w: 220, h: 24 },
-  { x: 1080, offsetFromGround: 270, w: 200, h: 24 },
-  { x: 1380, offsetFromGround: 190, w: 210, h: 24 },
-  { x: 1680, offsetFromGround: 250, w: 190, h: 24 }
+  { x: 220, offsetFromGround: 160, w: 240, h: 24 }, // Broad heavenly clouds
+  { x: 600, offsetFromGround: 240, w: 220, h: 24 },
+  { x: 980, offsetFromGround: 190, w: 250, h: 24 },
+  { x: 1380, offsetFromGround: 280, w: 210, h: 24 },
+  { x: 1750, offsetFromGround: 220, w: 220, h: 24 }
 ];
 
 const WORLDS_CONFIG = [
@@ -84,6 +81,7 @@ const WORLDS_CONFIG = [
     stations: { cuttingBoard: { x: 440, offsetFromGround: 230 }, pot: { x: 980, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
+      funFact: "Le tajine tire son nom du plat en terre cuite conique traditionnel qui permet une cuisson lente à l'étouffée.",
       steps: [
         { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
         { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 440 },
@@ -97,14 +95,15 @@ const WORLDS_CONFIG = [
     name: "Monde 2 : Royaume Céleste 🌌",
     bgStyle: { background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)' },
     platforms: PLATFORMS_W2,
-    items: [{ id: 'item_w2_1', x: 220, y: 170, type: '🍄' }],
-    stations: { cuttingBoard: { x: 520, offsetFromGround: 250 }, pot: { x: 1100, offsetFromGround: 280 }, counter: { x: 1700, offsetFromGround: 240 } },
+    items: [{ id: 'item_w2_1', x: 220, y: 280, type: '🍄' }],
+    stations: { cuttingBoard: { x: 500, offsetFromGround: 140 }, pot: { x: 1060, offsetFromGround: 180 }, counter: { x: 1700, offsetFromGround: 210 } },
     recipe: {
       name: "Couscous aux Champignons",
+      funFact: "Le couscous est inscrit au patrimoine immatériel de l'UNESCO et symbolise le partage et la convivialité au Maghreb.",
       steps: [
         { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 220 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 520 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1100 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1060 },
         { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1700 }
       ]
     }
@@ -114,15 +113,16 @@ const WORLDS_CONFIG = [
     name: "Monde 3 : Volcan Infernal 🔥",
     bgStyle: { background: 'linear-gradient(180deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%)' },
     platforms: PLATFORMS_W3,
-    items: [{ id: 'item_w3_1', x: 200, y: 150, type: '🌶️' }],
-    stations: { cuttingBoard: { x: 480, offsetFromGround: 240 }, pot: { x: 1040, offsetFromGround: 270 }, counter: { x: 1620, offsetFromGround: 250 } },
+    items: [{ id: 'item_w3_1', x: 200, y: 120, type: '🌶️' }],
+    stations: { cuttingBoard: { x: 520, offsetFromGround: 120 }, pot: { x: 1160, offsetFromGround: 150 }, counter: { x: 1500, offsetFromGround: 280 } },
     recipe: {
-      name: "Merguez piquantes",
+      name: "Merguez Piquantes",
+      funFact: "Les merguez authentiques sont composées de viande de bœuf ou d'agneau embossée dans du boyau naturel et relevée au cumin et harissa.",
       steps: [
         { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 200 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 480 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1040 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1620 }
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 520 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1160 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1500 }
       ]
     }
   },
@@ -131,15 +131,16 @@ const WORLDS_CONFIG = [
     name: "Monde 4 : Vide Cosmique 🔮",
     bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
     platforms: PLATFORMS_W4,
-    items: [{ id: 'item_w4_1', x: 250, y: 190, type: '🧄' }],
-    stations: { cuttingBoard: { x: 550, offsetFromGround: 260 }, pot: { x: 1150, offsetFromGround: 240 }, counter: { x: 1750, offsetFromGround: 270 } },
+    items: [{ id: 'item_w4_1', x: 240, y: 350, type: '🧄' }],
+    stations: { cuttingBoard: { x: 580, offsetFromGround: 220 }, pot: { x: 1260, offsetFromGround: 180 }, counter: { x: 1600, offsetFromGround: 290 } },
     recipe: {
       name: "Pastilla au Poulet & Ail",
+      funFact: "La pastilla marie subtilement le salé et le sucré en combinant de la volaille épicée, des amandes et de la cannelle dans une pâte croustillante.",
       steps: [
-        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 250 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 550 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1150 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1750 }
+        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 240 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 580 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1260 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1600 }
       ]
     }
   },
@@ -148,15 +149,16 @@ const WORLDS_CONFIG = [
     name: "Monde 5 : Paradis Céleste ✨",
     bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
     platforms: PLATFORMS_W5,
-    items: [{ id: 'item_w5_1', x: 200, y: 160, type: '🍋' }],
-    stations: { cuttingBoard: { x: 500, offsetFromGround: 240 }, pot: { x: 1080, offsetFromGround: 270 }, counter: { x: 1680, offsetFromGround: 250 } },
+    items: [{ id: 'item_w5_1', x: 220, y: 160, type: '🍋' }],
+    stations: { cuttingBoard: { x: 600, offsetFromGround: 240 }, pot: { x: 1380, offsetFromGround: 190 }, counter: { x: 1750, offsetFromGround: 220 } },
     recipe: {
       name: "Poulet Citron Confit",
+      funFact: "Les citrons confits au sel sont un ingrédient signature de la gastronomie marocaine, apportant une acidité unique et parfumée.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 200 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1080 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1680 }
+        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 220 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 600 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1380 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1750 }
       ]
     }
   }
@@ -204,7 +206,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.0 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.1 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Game completion timer & leaderboard state
@@ -480,7 +482,7 @@ export default function App() {
 
         triggerAchievement("🎉 Plat servi avec succès ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
 
-        // Open Portal & Advance to Next World
+        // Open Portal & Advance to Next World with Instant Spawn Reset to Start ($x = 140$)
         setPortalActive(true);
         setTimeout(() => { setShowPortal(true); }, 800);
 
@@ -495,13 +497,19 @@ export default function App() {
           updateCurrentRecipe(nextCfg.recipe);
           updateActiveStep(0);
 
+          // INSTANT TELEPORT BACK TO START POSITION ($x = 140$)
+          const spawnFloor = viewportRef.current.h - GROUND_HEIGHT;
+          posRef.current = { x: 140, y: spawnFloor };
+          setPos({ x: 140, y: spawnFloor });
+          velRef.current = { x: 0, y: 0 };
+
           const resetStations = { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: stationRef.current.servedDishes };
           setStationState(resetStations);
           stationRef.current = resetStations;
 
           setShowPortal(false);
           setPortalActive(false);
-          triggerAchievement(`Bienvenue dans le ${nextCfg.name} !`, 'info', 4000);
+          triggerAchievement(`Bienvenue dans le ${nextCfg.name} ! Position de départ réinitialisée.`, 'info', 4000);
         }, 2400);
 
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
@@ -907,7 +915,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.0)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.1)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -980,6 +988,39 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
 
+          {/* THREE REQUIRED BANNERS IN EVERY MAP */}
+          <div style={styles.threeBannersContainer}>
+            {/* Banner 1: Food Recipe Preview */}
+            <div style={styles.bannerCard}>
+              <div style={styles.bannerHeader}>🖼️ Plat du Monde</div>
+              <div style={styles.bannerContent}>
+                <span style={{ fontSize: '1.8rem' }}>🍲</span>
+                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#fbbf24' }}>{currentRecipe.name}</span>
+              </div>
+            </div>
+
+            {/* Banner 2: Controls & Energy Guide */}
+            <div style={styles.bannerCard}>
+              <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
+              <div style={styles.bannerContent}>
+                <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1' }}>
+                  <strong>WASD / Flèches</strong> : Bouger & Sauter<br />
+                  <strong>ESPACE</strong> : Prendre / Couper / Cuire / Servir
+                </span>
+              </div>
+            </div>
+
+            {/* Banner 3: Fun Fact About Food */}
+            <div style={styles.bannerCard}>
+              <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
+              <div style={styles.bannerContent}>
+                <span style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.2' }}>
+                  {currentRecipe.funFact}
+                </span>
+              </div>
+            </div>
+          </div>
+
           {/* Game Finished Victory Screen Modal & Leaderboard */}
           {isGameFinished && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -1050,7 +1091,7 @@ export default function App() {
                 🌀
               </div>
               <h2 style={{ color: '#fbbf24', marginTop: '30px', fontSize: '2rem', fontWeight: '900', textShadow: '0 4px 15px rgba(0,0,0,0.8)' }}>
-                ✨ Téléportation vers le Monde Suivant... ✨
+                ✨ Téléportation & Retour au Départ... ✨
               </h2>
             </div>
           )}
@@ -1226,6 +1267,10 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  threeBannersContainer: { position: 'fixed', top: '70px', left: '20px', display: 'flex', gap: '12px', zIndex: 55, pointerEvents: 'none' },
+  bannerCard: { background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(251, 191, 36, 0.5)', borderRadius: '12px', padding: '10px 14px', width: '210px', boxShadow: '0 8px 20px rgba(0,0,0,0.5)' },
+  bannerHeader: { fontSize: '0.8rem', fontWeight: '900', color: '#fbbf24', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '4px' },
+  bannerContent: { display: 'flex', alignItems: 'center', gap: '10px' },
   compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   compassRight: { position: 'fixed', right: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
