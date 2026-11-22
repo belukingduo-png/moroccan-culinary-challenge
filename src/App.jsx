@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.4-zellige";
+const APP_VERSION = "v11.5-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -170,21 +170,28 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.4 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.5 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Portal Transition State
   const [showPortal, setShowPortal] = useState(false);
   const [portalActive, setPortalActive] = useState(false);
 
-  // Achievement / Quest System State
+  // Achievement / Quest System State (with Ref sync)
   const [currentRecipe, setCurrentRecipe] = useState(worldConfig.recipe);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  
   const activeStepIndexRef = useRef(0);
+  const recipeRef = useRef(worldConfig.recipe);
 
   const updateActiveStep = (newIndex) => {
     activeStepIndexRef.current = newIndex;
     setActiveStepIndex(newIndex);
+  };
+
+  const updateCurrentRecipe = (newRecipe) => {
+    recipeRef.current = newRecipe;
+    setCurrentRecipe(newRecipe);
   };
 
   const [achievementBanner, setAchievementBanner] = useState({
@@ -272,7 +279,7 @@ export default function App() {
       const t3 = setTimeout(() => setCountdown('GO!'), 3000);
       const t4 = setTimeout(() => {
         setCountdown(null);
-        triggerAchievement(`Objectif : ${currentRecipe.steps[0].label}`, 'info', 4000);
+        triggerAchievement(`Objectif : ${recipeRef.current.steps[0].label}`, 'info', 4000);
       }, 3700);
       return () => {
         clearTimeout(t1);
@@ -310,7 +317,7 @@ export default function App() {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
     const isGood = posVal >= 30 && posVal <= 70;
-    const step = currentRecipe.steps[activeStepIndexRef.current];
+    const step = recipeRef.current.steps[activeStepIndexRef.current];
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
@@ -404,7 +411,7 @@ export default function App() {
 
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
-    const step = currentRecipe.steps[activeStepIndexRef.current];
+    const step = recipeRef.current.steps[activeStepIndexRef.current];
 
     // 1. Serving Counter
     if (Math.abs(px - stations.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
@@ -429,7 +436,9 @@ export default function App() {
           setCurrentWorldIndex(nextWorldIdx);
           setWorldItems(nextCfg.items);
           itemsRef.current = nextCfg.items;
-          setCurrentRecipe(nextCfg.recipe);
+          
+          // Instantly sync recipe and reset step index to 0 for the new world
+          updateCurrentRecipe(nextCfg.recipe);
           updateActiveStep(0);
 
           const resetStations = { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: stationRef.current.servedDishes };
@@ -486,7 +495,7 @@ export default function App() {
       return;
     }
 
-    // 4. World Pickup (Robust Emoji Normalization)
+    // 4. World Pickup (Using recipeRef for accurate current world target step)
     if (!curHolding) {
       let pickedItem = null;
       itemsRef.current.forEach(item => {
@@ -720,7 +729,7 @@ export default function App() {
   const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  // Calculate target X position for guidance
+  // Calculate target X position for guidance using recipeRef
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
@@ -844,7 +853,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.4)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.5)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
