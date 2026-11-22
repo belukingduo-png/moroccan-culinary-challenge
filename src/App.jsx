@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.3-zellige";
+const APP_VERSION = "v9.4-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,12 +132,19 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.3 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.4 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
   const [currentRecipe, setCurrentRecipe] = useState(RECIPES_POOL[0]);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
+  const activeStepIndexRef = useRef(0);
+
+  const updateActiveStep = (newIndex) => {
+    activeStepIndexRef.current = newIndex;
+    setActiveStepIndex(newIndex);
+  };
+
   const [achievementBanner, setAchievementBanner] = useState({
     visible: false,
     text: '',
@@ -261,7 +268,7 @@ export default function App() {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
     const isGood = posVal >= 30 && posVal <= 70;
-    const step = currentRecipe.steps[activeStepIndex];
+    const step = currentRecipe.steps[activeStepIndexRef.current];
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
@@ -272,7 +279,7 @@ export default function App() {
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setActiveStepIndex(prev => prev + 1);
+        updateActiveStep(activeStepIndexRef.current + 1);
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 15));
@@ -288,7 +295,7 @@ export default function App() {
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setActiveStepIndex(prev => prev + 1);
+        updateActiveStep(activeStepIndexRef.current + 1);
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 15));
@@ -342,7 +349,7 @@ export default function App() {
 
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
-    const step = currentRecipe.steps[activeStepIndex];
+    const step = currentRecipe.steps[activeStepIndexRef.current];
 
     // 1. Serving Counter
     if (Math.abs(px - STATIONS.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
@@ -357,7 +364,7 @@ export default function App() {
         const newRecipe = RECIPES_POOL[Math.floor(Math.random() * RECIPES_POOL.length)];
         setTimeout(() => {
           setCurrentRecipe(newRecipe);
-          setActiveStepIndex(0);
+          updateActiveStep(0);
           triggerAchievement(`Nouvelle Recette : ${newRecipe.name} - Objectif : ${newRecipe.steps[0].label}`, 'info', 4000);
         }, 1500);
 
@@ -411,7 +418,6 @@ export default function App() {
       let pickedItem = null;
       const remainingItems = itemsRef.current.filter(item => {
         const xDist = Math.abs(px - item.x);
-        // Check platform alignment for items placed on platforms
         const itemPlatform = PLATFORM_LAYOUT.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
         const yDist = Math.abs(py - itemWorldY);
@@ -429,7 +435,7 @@ export default function App() {
           itemsRef.current = remainingItems;
           setWorldItems(remainingItems);
           triggerAchievement("✅ Ingrédient correct ! Prochaine étape : Couper sur la planche 🔪", 'success', 3500);
-          setActiveStepIndex(prev => prev + 1);
+          updateActiveStep(activeStepIndexRef.current + 1);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         } else {
           setScore(prev => Math.max(0, prev - 20));
@@ -721,7 +727,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.3)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.4)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
