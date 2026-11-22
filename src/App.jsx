@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.9";
+const APP_VERSION = "v9.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.9 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v9.0 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -402,13 +402,12 @@ export default function App() {
       return;
     }
 
-    // 4. Pickup from World Items (Step 0)
+    // 4. Pickup from World Items (Step 0) - Robust X-range check
     if (!curHolding && curStep === 0) {
       let pickedType = null;
       const remainingItems = itemsRef.current.filter(item => {
-        const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
-        const dist = Math.hypot(px - item.x, py - itemWorldY);
-        if (dist < 100 && !pickedType) {
+        const xDist = Math.abs(px - item.x);
+        if (xDist < 80 && !pickedType) {
           if (item.type === currentRecipe.ingredient) {
             pickedType = item.type;
             return false;
@@ -425,7 +424,7 @@ export default function App() {
         setWorldItems(remainingItems);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         
-        // 👉 Successfully advances to Step 1 (Cutting) and shows green success banner!
+        // Instantly forces step advancement and green success banner
         triggerQuestFeedback('success', 1);
       }
     }
