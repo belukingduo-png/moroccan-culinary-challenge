@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.4-zellige";
+const APP_VERSION = "v9.5-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -60,19 +60,19 @@ const RECIPES_POOL = [
   {
     name: "Tajine à la Tomate",
     steps: [
-      { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅' },
-      { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut' },
-      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook' },
-      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve' }
+      { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
+      { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
+      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
+      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
     ]
   },
   {
     name: "Couscous à l'Ail",
     steps: [
-      { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄' },
-      { id: 'cut', label: 'Couper l\'Ail 🔪', targetMinigame: 'cut' },
-      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook' },
-      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve' }
+      { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 780 },
+      { id: 'cut', label: 'Couper l\'Ail 🔪', targetMinigame: 'cut', targetX: 500 },
+      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
+      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
     ]
   }
 ];
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.4 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.5 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -188,7 +188,7 @@ export default function App() {
     setHoldingState(state);
   };
 
-  const triggerAchievement = (text, status = 'success', duration = 3000) => {
+  const triggerAchievement = (text, status = 'success', duration = 3500) => {
     setAchievementBanner({ visible: true, text, status });
     setTimeout(() => {
       setAchievementBanner(prev => ({ ...prev, visible: false }));
@@ -283,7 +283,12 @@ export default function App() {
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 15));
-        triggerAchievement("❌ Coupe ratée ! -15 pts", 'error', 3000);
+        triggerAchievement("❌ Coupe ratée ! -15 pts (Réessaie sur la planche)", 'error', 3500);
+        // Reset cutting board state so player isn't stuck looping
+        const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
+        stationRef.current = resetStations;
+        setStationState(resetStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
         setActiveMinigame(null);
       }
     } else if (activeMinigame.type === 'cook') {
@@ -299,7 +304,12 @@ export default function App() {
         setActiveMinigame(null);
       } else {
         setScore(prev => Math.max(0, prev - 15));
-        triggerAchievement("❌ Température incorrecte ! -15 pts", 'error', 3000);
+        triggerAchievement("❌ Température incorrecte ! -15 pts (Réessaie dans le pot)", 'error', 3500);
+        // Reset pot state so player isn't stuck
+        const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
+        stationRef.current = resetStations;
+        setStationState(resetStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
         setActiveMinigame(null);
       }
     }
@@ -653,6 +663,21 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
+  // Calculate direction for golden guidance arrow
+  const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
+  let targetWorldX = 220;
+  if (currentStepObj.id === 'pickup') {
+    const foundItem = worldItems.find(i => i.type === currentStepObj.targetItem);
+    targetWorldX = foundItem ? foundItem.x : 220;
+  } else if (currentStepObj.id === 'cut') {
+    targetWorldX = STATIONS.cuttingBoard.x;
+  } else if (currentStepObj.id === 'cook') {
+    targetWorldX = STATIONS.pot.x;
+  } else if (currentStepObj.id === 'serve') {
+    targetWorldX = STATIONS.counter.x;
+  }
+  const isTargetToRight = targetWorldX > pos.x;
+
   return (
     <div style={styles.appContainer}>
       <style>{`
@@ -710,6 +735,14 @@ export default function App() {
         .countdown-num {
           animation: popCountdown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
+        @keyframes goldenPulse {
+          0% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
+          50% { transform: scale(1.15); filter: drop-shadow(0 0 12px #fbbf24); }
+          100% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
+        }
+        .golden-glow-item {
+          animation: goldenPulse 0.8s ease-in-out infinite;
+        }
       `}</style>
 
       {(screen === 'home' || screen === 'mode_select') && (
@@ -727,7 +760,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.4)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.5)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -828,17 +861,18 @@ export default function App() {
             </div>
           )}
 
-          {/* Quest Tracker Widget */}
+          {/* Persistent Quest Tracker Widget */}
           <div style={{
             position: 'fixed',
             top: '70px',
             right: '20px',
-            background: 'rgba(15, 23, 42, 0.85)',
-            border: '1px solid rgba(255,255,255,0.15)',
+            background: 'rgba(15, 23, 42, 0.9)',
+            border: '2px solid rgba(251, 191, 36, 0.4)',
             padding: '14px 18px',
             borderRadius: '14px',
             zIndex: 50,
-            width: '270px'
+            width: '270px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.4)'
           }}>
             <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
               📜 {currentRecipe.name}
@@ -1006,18 +1040,20 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients */}
+            {/* World Ingredients (with golden glow on the correct target item) */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
+              const isTargetItem = currentStepObj.id === 'pickup' && item.type === currentStepObj.targetItem;
               return (
                 <div
                   key={idx}
+                  className={isTargetItem ? "golden-glow-item" : ""}
                   style={{
                     position: 'absolute',
                     left: `${item.x}px`,
                     top: `${itemTop}px`,
                     fontSize: '1.8rem',
-                    filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
+                    filter: isTargetItem ? 'drop-shadow(0 0 10px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
                     transform: 'translateX(-50%)'
                   }}
                 >
@@ -1028,8 +1064,11 @@ export default function App() {
 
             <div style={styles.ground} />
 
-            {/* Local Player Render */}
+            {/* Local Player Render with Directional Guidance Arrow */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
+              <div className="holding-arrow" style={{ position: 'absolute', top: '-60px', fontSize: '1.5rem', color: '#fbbf24', fontWeight: '900' }}>
+                {isTargetToRight ? '➡️ 🌟' : '🌟 ⬅️'}
+              </div>
               {holdingItem && (
                 <div className="holding-arrow" style={styles.holdingIndicator}>
                   ▼ {holdingItem} ({holdingState})
