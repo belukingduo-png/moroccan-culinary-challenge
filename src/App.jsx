@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.1-zellige";
+const APP_VERSION = "v12.2-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -27,7 +27,7 @@ const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 28;
 const HITBOX_HALF_W = 16;
 
-// Completely Unique Platform Layouts for Each of the 5 Worlds (No Repetition)
+// Unique Platform Layouts for Each World with Vertical Climbing Challenges
 const PLATFORMS_W1 = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
@@ -39,36 +39,36 @@ const PLATFORMS_W1 = [
 ];
 
 const PLATFORMS_W2 = [
-  { x: 220, offsetFromGround: 280, w: 160, h: 24 }, // High vertical climb start!
-  { x: 500, offsetFromGround: 140, w: 180, h: 24 },
-  { x: 780, offsetFromGround: 320, w: 150, h: 24 }, // Very high jump challenge
-  { x: 1060, offsetFromGround: 180, w: 200, h: 24 },
-  { x: 1380, offsetFromGround: 290, w: 190, h: 24 },
-  { x: 1700, offsetFromGround: 210, w: 220, h: 24 }
+  { x: 220, offsetFromGround: 150, w: 180, h: 24 },
+  { x: 500, offsetFromGround: 320, w: 160, h: 24 }, // High vertical climb for Cutting Board!
+  { x: 780, offsetFromGround: 180, w: 200, h: 24 },
+  { x: 1060, offsetFromGround: 280, w: 190, h: 24 },
+  { x: 1380, offsetFromGround: 140, w: 210, h: 24 },
+  { x: 1700, offsetFromGround: 250, w: 220, h: 24 }
 ];
 
 const PLATFORMS_W3 = [
-  { x: 200, offsetFromGround: 120, w: 220, h: 24 }, // Close and easy start
-  { x: 520, offsetFromGround: 120, w: 220, h: 24 }, // Stepping stones close together
-  { x: 840, offsetFromGround: 200, w: 200, h: 24 },
-  { x: 1160, offsetFromGround: 150, w: 210, h: 24 },
-  { x: 1500, offsetFromGround: 280, w: 230, h: 24 }
+  { x: 200, offsetFromGround: 200, w: 200, h: 24 },
+  { x: 520, offsetFromGround: 140, w: 220, h: 24 },
+  { x: 840, offsetFromGround: 350, w: 150, h: 24 }, // Extreme high climb for Item!
+  { x: 1160, offsetFromGround: 220, w: 210, h: 24 },
+  { x: 1500, offsetFromGround: 160, w: 230, h: 24 }
 ];
 
 const PLATFORMS_W4 = [
-  { x: 240, offsetFromGround: 350, w: 140, h: 24 }, // Extreme skyscraper climb in the void!
-  { x: 580, offsetFromGround: 220, w: 180, h: 24 },
-  { x: 920, offsetFromGround: 310, w: 160, h: 24 },
-  { x: 1260, offsetFromGround: 180, w: 200, h: 24 },
-  { x: 1600, offsetFromGround: 290, w: 190, h: 24 }
+  { x: 240, offsetFromGround: 180, w: 180, h: 24 },
+  { x: 580, offsetFromGround: 290, w: 190, h: 24 },
+  { x: 920, offsetFromGround: 150, w: 200, h: 24 },
+  { x: 1260, offsetFromGround: 360, w: 160, h: 24 }, // Skyscraper climb for Item!
+  { x: 1600, offsetFromGround: 220, w: 200, h: 24 }
 ];
 
 const PLATFORMS_W5 = [
-  { x: 220, offsetFromGround: 160, w: 240, h: 24 }, // Broad heavenly clouds
-  { x: 600, offsetFromGround: 240, w: 220, h: 24 },
-  { x: 980, offsetFromGround: 190, w: 250, h: 24 },
-  { x: 1380, offsetFromGround: 280, w: 210, h: 24 },
-  { x: 1750, offsetFromGround: 220, w: 220, h: 24 }
+  { x: 220, offsetFromGround: 160, w: 220, h: 24 },
+  { x: 600, offsetFromGround: 300, w: 180, h: 24 }, // High climb for Cutting Board!
+  { x: 980, offsetFromGround: 190, w: 230, h: 24 },
+  { x: 1380, offsetFromGround: 270, w: 200, h: 24 },
+  { x: 1750, offsetFromGround: 150, w: 220, h: 24 }
 ];
 
 const WORLDS_CONFIG = [
@@ -78,14 +78,15 @@ const WORLDS_CONFIG = [
     bgStyle: { background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
     platforms: PLATFORMS_W1,
     items: [{ id: 'item_1', x: 220, y: 130, type: '🍅' }],
-    stations: { cuttingBoard: { x: 440, offsetFromGround: 230 }, pot: { x: 980, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
+    // Order: Item (220) -> Cutting Board (600) -> Pot (1100) -> Counter (1880)
+    stations: { cuttingBoard: { x: 600, offsetFromGround: 230 }, pot: { x: 1100, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
       funFact: "Le tajine tire son nom du plat en terre cuite conique traditionnel qui permet une cuisson lente à l'étouffée.",
       steps: [
         { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 440 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 980 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 600 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1100 },
         { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1880 }
       ]
     }
@@ -95,15 +96,16 @@ const WORLDS_CONFIG = [
     name: "Monde 2 : Royaume Céleste 🌌",
     bgStyle: { background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)' },
     platforms: PLATFORMS_W2,
-    items: [{ id: 'item_w2_1', x: 220, y: 280, type: '🍄' }],
-    stations: { cuttingBoard: { x: 500, offsetFromGround: 140 }, pot: { x: 1060, offsetFromGround: 180 }, counter: { x: 1700, offsetFromGround: 210 } },
+    items: [{ id: 'item_w2_1', x: 780, y: 180, type: '🍄' }],
+    // Order: Cutting Board (500 - high climb) -> Item (780) -> Pot (1380) -> Counter (1700)
+    stations: { cuttingBoard: { x: 500, offsetFromGround: 320 }, pot: { x: 1380, offsetFromGround: 140 }, counter: { x: 1700, offsetFromGround: 250 } },
     recipe: {
       name: "Couscous aux Champignons",
       funFact: "Le couscous est inscrit au patrimoine immatériel de l'UNESCO et symbolise le partage et la convivialité au Maghreb.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 220 },
+        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 780 },
         { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1060 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1380 },
         { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1700 }
       ]
     }
@@ -113,15 +115,16 @@ const WORLDS_CONFIG = [
     name: "Monde 3 : Volcan Infernal 🔥",
     bgStyle: { background: 'linear-gradient(180deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%)' },
     platforms: PLATFORMS_W3,
-    items: [{ id: 'item_w3_1', x: 200, y: 120, type: '🌶️' }],
-    stations: { cuttingBoard: { x: 520, offsetFromGround: 120 }, pot: { x: 1160, offsetFromGround: 150 }, counter: { x: 1500, offsetFromGround: 280 } },
+    items: [{ id: 'item_w3_1', x: 840, y: 350, type: '🌶️' }], // Very high climb item!
+    // Order: Pot (520) -> Cutting Board (1160) -> Item (840) -> Counter (1500)
+    stations: { pot: { x: 520, offsetFromGround: 140 }, cuttingBoard: { x: 1160, offsetFromGround: 220 }, counter: { x: 1500, offsetFromGround: 160 } },
     recipe: {
       name: "Merguez Piquantes",
       funFact: "Les merguez authentiques sont composées de viande de bœuf ou d'agneau embossée dans du boyau naturel et relevée au cumin et harissa.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 200 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 520 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1160 },
+        { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 840 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 1160 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 520 },
         { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1500 }
       ]
     }
@@ -131,16 +134,17 @@ const WORLDS_CONFIG = [
     name: "Monde 4 : Vide Cosmique 🔮",
     bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
     platforms: PLATFORMS_W4,
-    items: [{ id: 'item_w4_1', x: 240, y: 350, type: '🧄' }],
-    stations: { cuttingBoard: { x: 580, offsetFromGround: 220 }, pot: { x: 1260, offsetFromGround: 180 }, counter: { x: 1600, offsetFromGround: 290 } },
+    items: [{ id: 'item_w4_1', x: 1260, y: 360, type: '🧄' }], // Skyscraper climb item!
+    // Order: Counter (580) -> Pot (920) -> Item (1260) -> Cutting Board (1600)
+    stations: { counter: { x: 580, offsetFromGround: 290 }, pot: { x: 920, offsetFromGround: 150 }, cuttingBoard: { x: 1600, offsetFromGround: 220 } },
     recipe: {
       name: "Pastilla au Poulet & Ail",
       funFact: "La pastilla marie subtilement le salé et le sucré en combinant de la volaille épicée, des amandes et de la cannelle dans une pâte croustillante.",
       steps: [
-        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 240 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 580 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1260 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1600 }
+        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 1260 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 1600 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 920 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 580 }
       ]
     }
   },
@@ -149,16 +153,17 @@ const WORLDS_CONFIG = [
     name: "Monde 5 : Paradis Céleste ✨",
     bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
     platforms: PLATFORMS_W5,
-    items: [{ id: 'item_w5_1', x: 220, y: 160, type: '🍋' }],
-    stations: { cuttingBoard: { x: 600, offsetFromGround: 240 }, pot: { x: 1380, offsetFromGround: 190 }, counter: { x: 1750, offsetFromGround: 220 } },
+    items: [{ id: 'item_w5_1', x: 980, y: 190, type: '🍋' }],
+    // Order: Pot (220) -> Item (980) -> Counter (1380) -> Cutting Board (600 - high climb)
+    stations: { pot: { x: 220, offsetFromGround: 160 }, counter: { x: 1380, offsetFromGround: 270 }, cuttingBoard: { x: 600, offsetFromGround: 300 } },
     recipe: {
       name: "Poulet Citron Confit",
       funFact: "Les citrons confits au sel sont un ingrédient signature de la gastronomie marocaine, apportant une acidité unique et parfumée.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 220 },
+        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 980 },
         { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 600 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1380 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1750 }
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 220 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1380 }
       ]
     }
   }
@@ -206,7 +211,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.1 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.2 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Game completion timer & leaderboard state
@@ -783,10 +788,10 @@ export default function App() {
 
   const stations = worldConfig.stations;
   const cbPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
-  const cbTop = floorY - cbPlatform.offsetFromGround - 36;
+  const cbTop = floorY - cbPlatform.offsetFromGround - 42;
 
   const potPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
-  const potTop = floorY - potPlatform.offsetFromGround - 36;
+  const potTop = floorY - potPlatform.offsetFromGround - 48;
 
   const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
@@ -915,7 +920,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.1)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.2)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1144,7 +1149,7 @@ export default function App() {
               return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
-            {/* Cutting Board Station on Platform */}
+            {/* Cutting Board Station on Platform (Perfectly Centered) */}
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1164,15 +1169,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Station on Platform */}
+            {/* Cooking Pot Station on Platform (Perfectly Centered) */}
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
-                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>🍲</div>
+                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-36px' }}>🍲</div>
                 {stationState.potCooking && (
-                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-14px', left: '16px', fontSize: '1.4rem' }}>🔥 🔥</div>
+                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-8px', left: '16px', fontSize: '1.4rem' }}>🔥 🔥</div>
                 )}
               </div>
             </div>
