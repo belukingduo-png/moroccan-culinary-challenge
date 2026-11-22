@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v5.7";
+const APP_VERSION = "v6.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -27,6 +27,22 @@ const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 80;
 const HITBOX_HALF_W = 18;
 
+// Scattered Moroccan ingredients, cutting board, pot, and counter stations
+const INITIAL_ITEMS = [
+  { id: 'item_1', x: 220, y: 130, type: '🍅', state: 'raw' },
+  { id: 'item_2', x: 500, y: 230, type: '🥩', state: 'raw' },
+  { id: 'item_3', x: 780, y: 140, type: '🧄', state: 'raw' },
+  { id: 'item_4', x: 1050, y: 260, type: '🌶️', state: 'raw' },
+  { id: 'item_5', x: 400, y: 0, type: '🫖', state: 'raw' },
+  { id: 'item_6', x: 1200, y: 0, type: '🥖', state: 'raw' }
+];
+
+const STATIONS = {
+  cuttingBoard: { x: 650, y: 140, label: ' chopping' },
+  pot: { x: 1150, y: 260, label: ' cooking' },
+  counter: { x: 1700, y: 0, label: ' serving' }
+};
+
 const PLATFORM_LAYOUT = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
@@ -37,18 +53,17 @@ const PLATFORM_LAYOUT = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-// Exact pixel coordinates mapped to Chef W2.png (Row 1, col 5 is parachute)
 const SPRITE_STATES = {
-  idle: [{ x: 35, y: 18, w: 34, h: 42 }],                    // 1 frame standing
-  run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }], // 2 frames running
-  jump: [{ x: 28, y: 160, w: 42, h: 38 }],                   // 1 frame jumping up
-  fall: [{ x: 188, y: 14, w: 46, h: 46 }]                    // 1 frame parachute falling
+  idle: [{ x: 35, y: 18, w: 34, h: 42 }],
+  run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }],
+  jump: [{ x: 28, y: 160, w: 42, h: 38 }],
+  fall: [{ x: 175, y: 14, w: 56, h: 54 }]
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
   const frames = SPRITE_STATES[anim] || SPRITE_STATES.idle;
   const f = frames[frameTick % frames.length];
-  const scale = 1.4;
+  const scale = 2.2;
 
   return (
     <div
@@ -87,8 +102,16 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const [players, setPlayers] = useState({});
+  const [worldItems, setWorldItems] = useState(INITIAL_ITEMS);
+  const [stationState, setStationState] = useState({
+    cuttingBoardItem: null,
+    potItem: null,
+    potCooking: false,
+    servedDishes: 0
+  });
+
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.7 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.0 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -100,6 +123,7 @@ export default function App() {
   const [animState, setAnimState] = useState('idle');
   const [facingRight, setFacingRight] = useState(true);
   const [frameTick, setFrameTick] = useState(0);
+  const [holdingItem, setHoldingItem] = useState(null);
 
   const posRef = useRef({ x: 140, y: initialFloorY });
   const velRef = useRef({ x: 0, y: 0 });
@@ -108,6 +132,8 @@ export default function App() {
   const facingRef = useRef(true);
   const keysPressed = useRef({});
   const viewportRef = useRef(viewport);
+  const itemsRef = useRef(INITIAL_ITEMS);
+  const stationRef = useRef(stationState);
 
   const backgroundParticles = useMemo(() => {
     return [...Array(15)].map((_, i) => ({
@@ -144,20 +170,141 @@ export default function App() {
 
   const getRandomName = () => RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 
-  const syncMyState = (newPos, floorY, currentAnim, isRight) => {
-    if (db && roomCode && !isHost) {
+  const syncMyState = (newPos, floorY, currentAnim, isRight, carriedItem) => {
+    if (db && roomCode) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
         x: newPos.x,
         heightAboveGround: Math.max(0, floorY - newPos.y),
         name: playerName,
         anim: currentAnim,
-        facingRight: isRight
+        facingRight: isRight,
+        holding: carriedItem
       });
     }
   };
 
+  // Interaction with Spacebar (Pickup ingredients or interact with stations)
+  const handleSpaceAction = () => {
+    const floorY = viewportRef.current.h - GROUND_HEIGHT;
+    const px = posRef.current.x;
+    const py = posRef.current.y;
+
+    // 1. Check Serving Counter (pickup finished dish or serve)
+    const counterWorldX = STATIONS.counter.x;
+    if (Math.abs(px - counterWorldX) < 50) {
+      if (stationRef.current.potItem && stationRef.current.potItem.state === 'cooked' && !holdingItem) {
+        setHoldingItem(stationRef.current.potItem.type);
+        const updatedStations = { ...stationRef.current, potItem: null };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        return;
+      } else if (holdingItem) {
+        // Serve dish
+        const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        setHoldingItem(null);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        return;
+      }
+    }
+
+    // 2. Check Cutting Board
+    const cbWorldX = STATIONS.cuttingBoard.x;
+    const cbWorldY = floorY - STATIONS.cuttingBoard.y;
+    if (Math.abs(px - cbWorldX) < 50 && Math.abs(py - cbWorldY) < 50) {
+      if (holdingItem && !stationRef.current.cuttingBoardItem) {
+        const newItem = { type: holdingItem, state: 'chopped' };
+        setHoldingItem(null);
+        const updatedStations = { ...stationRef.current, cuttingBoardItem: newItem };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        return;
+      } else if (!holdingItem && stationRef.current.cuttingBoardItem) {
+        setHoldingItem(stationRef.current.cuttingBoardItem.type);
+        const updatedStations = { ...stationRef.current, cuttingBoardItem: null };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        return;
+      }
+    }
+
+    // 3. Check Cooking Pot
+    const potWorldX = STATIONS.pot.x;
+    const potWorldY = floorY - STATIONS.pot.y;
+    if (Math.abs(px - potWorldX) < 50 && Math.abs(py - potWorldY) < 50) {
+      if (holdingItem && !stationRef.current.potItem) {
+        const newItem = { type: holdingItem, state: 'cooked' };
+        setHoldingItem(null);
+        const updatedStations = { ...stationRef.current, potItem: newItem, potCooking: true };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+
+        // Simulate cooking process
+        setTimeout(() => {
+          const finished = { type: '🍲 Tajine', state: 'cooked' };
+          stationRef.current = { ...stationRef.current, potItem: finished, potCooking: false };
+          setStationState(stationRef.current);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
+        }, 3000);
+        return;
+      }
+    }
+
+    // 4. Pickup from World Items
+    if (!holdingItem) {
+      const updatedItems = itemsRef.current.map(item => {
+        const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
+        const dist = Math.hypot(px - item.x, py - itemWorldY);
+        if (dist < 45) {
+          setHoldingItem(item.type);
+          return null;
+        }
+        return item;
+      }).filter(Boolean);
+
+      itemsRef.current = updatedItems;
+      setWorldItems(updatedItems);
+      if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), updatedItems);
+    }
+  };
+
+  // Keyboard controls
   useEffect(() => {
-    if (gameState !== 'playing' || isHost) return;
+    const handleKeyDown = (e) => {
+      if (gameState !== 'playing') return;
+      keysPressed.current[e.key] = true;
+
+      if (e.key === ' ') {
+        e.preventDefault();
+        handleSpaceAction();
+      } else if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
+        e.preventDefault();
+        velRef.current.y = -13;
+        jumpsRef.current -= 1;
+        setJumpsLeft(jumpsRef.current);
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      keysPressed.current[e.key] = false;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [gameState, holdingItem]);
+
+  // Physics loop
+  useEffect(() => {
+    if (gameState !== 'playing') return;
 
     const gravity = 0.65;
     const friction = 0.82;
@@ -239,37 +386,13 @@ export default function App() {
       setAnimState(currentAnim);
       setFacingRight(isRight);
 
-      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight);
+      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight, holdingItem);
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, isHost]);
+  }, [gameState, holdingItem]);
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (gameState !== 'playing' || isHost) return;
-      keysPressed.current[e.key] = true;
-
-      if ((e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
-        e.preventDefault();
-        velRef.current.y = -13;
-        jumpsRef.current -= 1;
-        setJumpsLeft(jumpsRef.current);
-      }
-    };
-
-    const handleKeyUp = (e) => {
-      keysPressed.current[e.key] = false;
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('keyup', handleKeyUp);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('keyup', handleKeyUp);
-    };
-  }, [gameState, isHost]);
-
+  // Firebase sync
   useEffect(() => {
     if (!db || !roomCode) return;
     const roomRef = ref(db, `rooms/${roomCode}`);
@@ -278,6 +401,14 @@ export default function App() {
       if (data) {
         setGameState(data.status || 'waiting');
         setPlayers(data.players || {});
+        if (data.items) {
+          setWorldItems(data.items);
+          itemsRef.current = data.items;
+        }
+        if (data.stations) {
+          setStationState(data.stations);
+          stationRef.current = data.stations;
+        }
         if (data.logs) setLogs(data.logs);
       }
     });
@@ -301,7 +432,9 @@ export default function App() {
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
-        logs: [`👑 Salon ${code} ouvert par l'Hôte`]
+        items: INITIAL_ITEMS,
+        stations: { cuttingBoardItem: null, potItem: null, potCooking: false, servedDishes: 0 },
+        logs: [`👑 Salon ${code} ouvert`]
       });
     }
   };
@@ -310,8 +443,8 @@ export default function App() {
     e.preventDefault();
     if (!roomCode) return;
     setIsHost(false);
-    const name = getRandomName();
-    setPlayerName(name);
+    const uniqueName = getRandomName();
+    setPlayerName(uniqueName);
     const spawnFloor = window.innerHeight - GROUND_HEIGHT;
     posRef.current = { x: 140, y: spawnFloor };
     setPos({ x: 140, y: spawnFloor });
@@ -319,11 +452,12 @@ export default function App() {
 
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
-        name: name,
+        name: uniqueName,
         x: 140,
         heightAboveGround: 0,
         anim: 'idle',
-        facingRight: true
+        facingRight: true,
+        holding: null
       });
     }
   };
@@ -347,6 +481,30 @@ export default function App() {
           animation: fallAndSpin linear infinite;
           z-index: 1;
           pointer-events: none;
+        }
+        @keyframes floatArrow {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-6px); }
+          100% { transform: translateY(0px); }
+        }
+        .holding-arrow {
+          animation: floatArrow 1s ease-in-out infinite;
+        }
+        @keyframes chopKnife {
+          0% { transform: translateY(0px) rotate(-20deg); }
+          50% { transform: translateY(-12px) rotate(15deg); }
+          100% { transform: translateY(0px) rotate(-20deg); }
+        }
+        .chopping-knife {
+          animation: chopKnife 0.3s ease-in-out infinite;
+        }
+        @keyframes boilPot {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+          100% { transform: scale(1); }
+        }
+        .boiling-pot {
+          animation: boilPot 0.6s ease-in-out infinite;
         }
       `}</style>
 
@@ -405,7 +563,7 @@ export default function App() {
               {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs...</p> : (
                 Object.keys(players).map(id => (
                   <div key={id} style={styles.playerItem}>
-                    <span>👨‍🍳 {players[id].name}</span>
+                    <span>👨‍🍳 {players[id].name} {players[id].holding ? `(Porte: ${players[id].holding})` : ''}</span>
                   </div>
                 ))
               )}
@@ -439,6 +597,8 @@ export default function App() {
           <div style={styles.hudBar}>
             <span>📍 Position: {Math.round(pos.x)}m</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
+            <span>🎒 En main: {holdingItem || 'Aucun'}</span>
+            <span>🍲 Plats servis: {stationState.servedDishes}</span>
           </div>
 
           <div
@@ -459,23 +619,80 @@ export default function App() {
             <div style={{ ...styles.bush, left: '1220px', width: '120px' }} />
             <div style={{ ...styles.bush, left: '1850px', width: '160px' }} />
 
-            {PLATFORM_LAYOUT.map((p, idx) => (
-              <div
-                key={idx}
-                style={{
-                  ...styles.platform,
-                  left: `${p.x}px`,
-                  top: `${floorY - p.offsetFromGround}px`,
-                  width: `${p.w}px`,
-                  height: `${p.h}px`
-                }}
-              />
-            ))}
+            {/* Platforms */}
+            {PLATFORM_LAYOUT.map((p, idx) => {
+              const platTop = floorY - p.offsetFromGround;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    ...styles.platform,
+                    left: `${p.x}px`,
+                    top: `${platTop}px`,
+                    width: `${p.w}px`,
+                    height: `${p.h}px`
+                  }}
+                />
+              );
+            })}
+
+            {/* Cutting Board Station */}
+            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 40}px`, top: `${floorY - STATIONS.cuttingBoard.y - 36}px`, textAlign: 'center' }}>
+              <div style={styles.stationBoard}>🪵 Cutting Board</div>
+              {stationState.cuttingBoardItem && (
+                <div style={{ position: 'absolute', top: '-30px', left: '25px', fontSize: '1.8rem' }}>
+                  {stationState.cuttingBoardItem.type}
+                  <span className="chopping-knife" style={{ position: 'absolute', left: '15px', top: '-10px', fontSize: '1.4rem' }}>🔪</span>
+                </div>
+              )}
+            </div>
+
+            {/* Cooking Pot Station */}
+            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 40}px`, top: `${floorY - STATIONS.pot.y - 42}px`, textAlign: 'center' }}>
+              <div className={stationState.potCooking ? "boiling-pot" : ""} style={styles.stationPot}>
+                🍲 Pot {stationState.potCooking ? '(Cuisson...)' : ''}
+              </div>
+              {stationState.potItem && (
+                <div style={{ position: 'absolute', top: '-30px', left: '30px', fontSize: '1.8rem' }}>
+                  {stationState.potItem.type}
+                </div>
+              )}
+            </div>
+
+            {/* Serving Counter Station */}
+            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 50}px`, top: `${floorY - 60}px`, textAlign: 'center' }}>
+              <div style={styles.counterBox}>🛎️ Serving Counter</div>
+            </div>
+
+            {/* World Ingredients */}
+            {worldItems.map((item, idx) => {
+              const itemTop = item.y === 0 ? floorY - 38 : floorY - item.y - 34;
+              return (
+                <div
+                  key={idx}
+                  style={{
+                    position: 'absolute',
+                    left: `${item.x}px`,
+                    top: `${itemTop}px`,
+                    fontSize: '2rem',
+                    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
+                    transform: 'translateX(-50%)'
+                  }}
+                >
+                  {item.type}
+                </div>
+              );
+            })}
 
             <div style={styles.ground} />
 
             {/* Local Player Render */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
+              {holdingItem && (
+                <div className="holding-arrow" style={styles.holdingIndicator}>
+                  ▼ {holdingItem}
+                </div>
+              )}
               <div style={{ ...styles.tag, border: '1.5px solid #fbbf24' }}>{playerName}</div>
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} />
             </div>
@@ -492,6 +709,11 @@ export default function App() {
 
                 return (
                   <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
+                    {p.holding && (
+                      <div className="holding-arrow" style={styles.holdingIndicator}>
+                        ▼ {p.holding}
+                      </div>
+                    )}
                     <div style={styles.tag}>{p.name}</div>
                     <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} />
                   </div>
@@ -532,5 +754,9 @@ const styles = {
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
   ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 16px, #78350f 16px, #78350f 32px)', borderTop: '8px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
-  tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' }
+  tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
+  holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.9rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
+  stationBoard: { background: '#92400e', color: '#fef3c7', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #78350f', fontSize: '0.85rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
+  stationPot: { background: '#374151', color: '#f3f4f6', padding: '6px 14px', borderRadius: '8px', fontWeight: '800', border: '2px solid #1f2937', fontSize: '0.85rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
+  counterBox: { background: '#b45309', color: '#fff', padding: '8px 16px', borderRadius: '10px', fontWeight: '900', border: '3px solid #78350f', fontSize: '0.9rem', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' }
 };
