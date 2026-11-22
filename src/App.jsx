@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v10.0-zellige";
+const APP_VERSION = "v11.0-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -21,13 +21,14 @@ const RANDOM_NAMES = [
   "CouscousChief", "HarissaHero", "OliveOven", "SpiceSamurai", "KitchenKnight"
 ];
 
-const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
+const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍄', '🍲'];
 
 const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 28;
 const HITBOX_HALF_W = 16;
 
-const PLATFORM_LAYOUT = [
+// World 1 Platform Layout (Daytime Kitchen)
+const WORLD_1_PLATFORMS = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
   { x: 720, offsetFromGround: 140, w: 180, h: 24 },
@@ -37,17 +38,72 @@ const PLATFORM_LAYOUT = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-const INITIAL_ITEMS = [
-  { id: 'item_1', x: 220, y: 130, type: '🍅', origin: { x: 220, y: 130 } },
-  { id: 'item_2', x: 780, y: 140, type: '🧄', origin: { x: 780, y: 140 } },
-  { id: 'item_3', x: 1350, y: 170, type: '🥖', origin: { x: 1350, y: 170 } }
+// World 2 Platform Layout (Night Sky Twilight World - different heights & positions!)
+const WORLD_2_PLATFORMS = [
+  { x: 220, offsetFromGround: 170, w: 200, h: 24 },
+  { x: 520, offsetFromGround: 250, w: 180, h: 24 },
+  { x: 800, offsetFromGround: 150, w: 220, h: 24 },
+  { x: 1100, offsetFromGround: 280, w: 190, h: 24 },
+  { x: 1400, offsetFromGround: 190, w: 200, h: 24 },
+  { x: 1700, offsetFromGround: 240, w: 220, h: 24 }
 ];
 
-const STATIONS = {
-  cuttingBoard: { x: 500, offsetFromGround: 230 },
-  pot: { x: 1050, offsetFromGround: 260 },
-  counter: { x: 1950, offsetFromGround: 180 }
-};
+const WORLDS_CONFIG = [
+  {
+    id: 0,
+    name: "Monde 1 : Cuisine ensoleillée ☀️",
+    bgStyle: {
+      background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)'
+    },
+    platforms: WORLD_1_PLATFORMS,
+    items: [
+      { id: 'item_1', x: 220, y: 130, type: '🍅' },
+      { id: 'item_2', x: 780, y: 140, type: '🧄' },
+      { id: 'item_3', x: 1350, y: 170, type: '🥖' }
+    ],
+    stations: {
+      cuttingBoard: { x: 500, offsetFromGround: 230 },
+      pot: { x: 1050, offsetFromGround: 260 },
+      counter: { x: 1950, offsetFromGround: 180 }
+    },
+    recipe: {
+      name: "Tajine à la Tomate",
+      steps: [
+        { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
+      ]
+    }
+  },
+  {
+    id: 1,
+    name: "Monde 2 : Royaume Céleste 🌌",
+    bgStyle: {
+      background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)'
+    },
+    platforms: WORLD_2_PLATFORMS,
+    items: [
+      { id: 'item_w2_1', x: 260, y: 170, type: '🍄' },
+      { id: 'item_w2_2', x: 840, y: 150, type: '🧄' },
+      { id: 'item_w2_3', x: 1450, y: 190, type: '🍋' }
+    ],
+    stations: {
+      cuttingBoard: { x: 520, offsetFromGround: 250 },
+      pot: { x: 1100, offsetFromGround: 280 },
+      counter: { x: 1700, offsetFromGround: 240 }
+    },
+    recipe: {
+      name: "Couscous aux Champignons",
+      steps: [
+        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 260 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 520 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1100 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1700 }
+      ]
+    }
+  }
+];
 
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 15, w: 34, h: 45 }],
@@ -55,27 +111,6 @@ const SPRITE_STATES = {
   jump: [{ x: 28, y: 155, w: 42, h: 42 }],
   fall: [{ x: 35, y: 15, w: 34, h: 45 }]
 };
-
-const RECIPES_POOL = [
-  {
-    name: "Tajine à la Tomate",
-    steps: [
-      { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
-      { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
-      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
-      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
-    ]
-  },
-  {
-    name: "Couscous à l'Ail",
-    steps: [
-      { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 780 },
-      { id: 'cut', label: 'Couper l\'Ail 🔪', targetMinigame: 'cut', targetX: 500 },
-      { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
-      { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
-    ]
-  }
-];
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0, isGhost = false }) {
   const frames = SPRITE_STATES[anim] || SPRITE_STATES.idle;
@@ -120,7 +155,10 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const [players, setPlayers] = useState({});
-  const [worldItems, setWorldItems] = useState(INITIAL_ITEMS);
+  const [currentWorldIndex, setCurrentWorldIndex] = useState(0);
+  const worldConfig = WORLDS_CONFIG[currentWorldIndex];
+
+  const [worldItems, setWorldItems] = useState(worldConfig.items);
   const [stationState, setStationState] = useState({
     cuttingBoardItem: null,
     cuttingBoardActive: false,
@@ -132,11 +170,15 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v10.0 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.0 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
+  // Portal Transition State
+  const [showPortal, setShowPortal] = useState(false);
+  const [portalActive, setPortalActive] = useState(false);
+
   // Achievement / Quest System State
-  const [currentRecipe, setCurrentRecipe] = useState(RECIPES_POOL[0]);
+  const [currentRecipe, setCurrentRecipe] = useState(worldConfig.recipe);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   const activeStepIndexRef = useRef(0);
 
@@ -175,7 +217,7 @@ export default function App() {
   const facingRef = useRef(true);
   const keysPressed = useRef({});
   const viewportRef = useRef(viewport);
-  const itemsRef = useRef(INITIAL_ITEMS);
+  const itemsRef = useRef(worldConfig.items);
   const stationRef = useRef(stationState);
 
   const holdingItemRef = useRef(null);
@@ -349,14 +391,15 @@ export default function App() {
     const floorY = viewportRef.current.h - GROUND_HEIGHT;
     const px = posRef.current.x;
     const py = posRef.current.y;
+    const stations = worldConfig.stations;
 
-    const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
+    const cbPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
     const cbWorldY = floorY - cbPlatform.offsetFromGround;
 
-    const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+    const potPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
     const potWorldY = floorY - potPlatform.offsetFromGround;
 
-    const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
+    const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
     const curHolding = holdingItemRef.current;
@@ -364,20 +407,38 @@ export default function App() {
     const step = currentRecipe.steps[activeStepIndexRef.current];
 
     // 1. Serving Counter
-    if (Math.abs(px - STATIONS.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
+    if (Math.abs(px - stations.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
       if (curHolding && curState === 'cooked' && step && step.id === 'serve') {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         updateHolding(null, 'raw');
-        setScore(prev => prev + 250);
-        triggerAchievement("🎉 Plat servi avec succès ! +250 pts Bonus !", 'success', 4000);
+        setScore(prev => prev + 300);
+        triggerAchievement("🎉 Plat servi avec succès ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
 
-        // Pick next recipe and synchronously reset step index to 0
-        const newRecipe = RECIPES_POOL[Math.floor(Math.random() * RECIPES_POOL.length)];
-        setCurrentRecipe(newRecipe);
-        updateActiveStep(0);
-        triggerAchievement(`Nouvelle Recette : ${newRecipe.name} - Objectif : ${newRecipe.steps[0].label}`, 'info', 4000);
+        // Open Animated Portal & Teleport to Next World
+        setPortalActive(true);
+        setTimeout(() => {
+          setShowPortal(true);
+        }, 800);
+
+        setTimeout(() => {
+          const nextWorldIdx = (currentWorldIndex + 1) % WORLDS_CONFIG.length;
+          const nextCfg = WORLDS_CONFIG[nextWorldIdx];
+          setCurrentWorldIndex(nextWorldIdx);
+          setWorldItems(nextCfg.items);
+          itemsRef.current = nextCfg.items;
+          setCurrentRecipe(nextCfg.recipe);
+          updateActiveStep(0);
+
+          const resetStations = { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: stationRef.current.servedDishes };
+          setStationState(resetStations);
+          stationRef.current = resetStations;
+
+          setShowPortal(false);
+          setPortalActive(false);
+          triggerAchievement(`Bienvenue dans le ${nextCfg.name} !`, 'info', 4000);
+        }, 2400);
 
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
       } else if (step && step.id === 'serve') {
@@ -387,7 +448,7 @@ export default function App() {
     }
 
     // 2. Cutting Board Station
-    if (Math.abs(px - STATIONS.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
+    if (Math.abs(px - stations.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
       if (curHolding && curState === 'raw') {
         if (step && step.id === 'cut') {
           const itemType = curHolding;
@@ -406,7 +467,7 @@ export default function App() {
     }
 
     // 3. Pot Station
-    if (Math.abs(px - STATIONS.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
+    if (Math.abs(px - stations.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
       if (curHolding && curState === 'chopped') {
         if (step && step.id === 'cook') {
           const itemType = curHolding;
@@ -429,7 +490,7 @@ export default function App() {
       let pickedItem = null;
       const remainingItems = itemsRef.current.filter(item => {
         const xDist = Math.abs(px - item.x);
-        const itemPlatform = PLATFORM_LAYOUT.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
+        const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
         const yDist = Math.abs(py - itemWorldY);
 
@@ -541,8 +602,8 @@ export default function App() {
       }
 
       if (vy >= 0) {
-        for (let i = 0; i < PLATFORM_LAYOUT.length; i++) {
-          const plat = PLATFORM_LAYOUT[i];
+        for (let i = 0; i < worldConfig.platforms.length; i++) {
+          const plat = worldConfig.platforms[i];
           const platTop = floorY - plat.offsetFromGround;
           const withinX = px + HITBOX_HALF_W > plat.x && px - HITBOX_HALF_W < plat.x + plat.w;
           const crossedTop = prevY <= platTop + 4 && py >= platTop;
@@ -583,7 +644,7 @@ export default function App() {
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, isHost, countdown, activeMinigame]);
+  }, [gameState, isHost, countdown, activeMinigame, worldConfig]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -623,7 +684,7 @@ export default function App() {
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
-        items: INITIAL_ITEMS,
+        items: WORLD_1_PLATFORMS,
         stations: { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: 0 },
         logs: [`👑 Salon ${code} ouvert`]
       });
@@ -658,13 +719,14 @@ export default function App() {
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
   const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 60));
 
-  const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
+  const stations = worldConfig.stations;
+  const cbPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
   const cbTop = floorY - cbPlatform.offsetFromGround - 36;
 
-  const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+  const potPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
   const potTop = floorY - potPlatform.offsetFromGround - 36;
 
-  const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
+  const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
   // Calculate target X position for guidance
@@ -678,11 +740,11 @@ export default function App() {
     });
     targetWorldX = foundItem ? foundItem.x : 220;
   } else if (currentStepObj.id === 'cut') {
-    targetWorldX = STATIONS.cuttingBoard.x;
+    targetWorldX = stations.cuttingBoard.x;
   } else if (currentStepObj.id === 'cook') {
-    targetWorldX = STATIONS.pot.x;
+    targetWorldX = stations.pot.x;
   } else if (currentStepObj.id === 'serve') {
-    targetWorldX = STATIONS.counter.x;
+    targetWorldX = stations.counter.x;
   }
 
   const viewWidthWorld = viewport.w / zoom;
@@ -691,7 +753,7 @@ export default function App() {
   const isTargetToRight = !isTargetVisible && targetWorldX > cameraX + viewWidthWorld;
 
   return (
-    <div style={styles.appContainer}>
+    <div style={{ ...styles.appContainer, ...worldConfig.bgStyle }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         * { font-family: 'Inter', sans-serif; box-sizing: border-box; user-select: none; }
@@ -766,6 +828,14 @@ export default function App() {
         .pulsing-compass-right {
           animation: compassPulse 1s ease-in-out infinite;
         }
+        @keyframes portalSwirl {
+          0% { transform: scale(0) rotate(0deg); opacity: 0; }
+          50% { transform: scale(1.2) rotate(360deg); opacity: 0.95; }
+          100% { transform: scale(1) rotate(720deg); opacity: 1; }
+        }
+        .animated-portal {
+          animation: portalSwirl 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
       `}</style>
 
       {(screen === 'home' || screen === 'mode_select') && (
@@ -783,7 +853,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v10.0)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.0)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -857,6 +927,7 @@ export default function App() {
           {/* Top HUD Stats */}
           <div style={styles.hudBar}>
             <span>⭐ Score: {score}</span>
+            <span>🌍 {worldConfig.name}</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
             <span>🎒 En main: {holdingItem ? `${holdingItem} (${holdingState})` : 'Aucun'}</span>
             <span>🍲 Plats: {stationState.servedDishes}</span>
@@ -931,6 +1002,37 @@ export default function App() {
               );
             })}
           </div>
+
+          {/* Animated Portal Overlay Transition */}
+          {showPortal && (
+            <div style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'radial-gradient(circle, rgba(147, 51, 234, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
+              zIndex: 200,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <div className="animated-portal" style={{
+                width: '260px',
+                height: '260px',
+                borderRadius: '50%',
+                background: 'conic-gradient(from 0deg, #fbbf24, #38bdf8, #ec4899, #10b981, #fbbf24)',
+                boxShadow: '0 0 60px #fbbf24, inset 0 0 60px #38bdf8',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '5rem'
+              }}>
+                🌀
+              </div>
+              <h2 style={{ color: '#fbbf24', marginTop: '30px', fontSize: '2rem', fontWeight: '900', textShadow: '0 4px 15px rgba(0,0,0,0.8)' }}>
+                ✨ Téléportation vers un Nouveau Monde... ✨
+              </h2>
+            </div>
+          )}
 
           {/* On-Screen Mobile Touch Controls */}
           <div style={styles.touchControlsContainer}>
@@ -1021,7 +1123,7 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
 
-            {PLATFORM_LAYOUT.map((p, idx) => {
+            {worldConfig.platforms.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
               return (
                 <div
@@ -1038,7 +1140,7 @@ export default function App() {
             })}
 
             {/* Cutting Board Station on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
+            <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
@@ -1062,7 +1164,7 @@ export default function App() {
             </div>
 
             {/* Cooking Pot Station on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
+            <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
@@ -1081,10 +1183,15 @@ export default function App() {
             </div>
 
             {/* Serving Counter Station on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
+            <div style={{ position: 'absolute', left: `${stations.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'serve' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
                   ▼
+                </div>
+              )}
+              {portalActive && (
+                <div className="animated-portal" style={{ position: 'absolute', top: '-60px', left: '-30px', fontSize: '3rem', zIndex: 25 }}>
+                  🌀
                 </div>
               )}
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
@@ -1169,7 +1276,7 @@ export default function App() {
 }
 
 const styles = {
-  appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', position: 'relative', color: '#fff' },
+  appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', color: '#fff' },
   versionBadge: { position: 'fixed', bottom: '12px', left: '16px', fontSize: '0.85rem', fontWeight: '800', color: 'rgba(255,255,255,0.6)', background: 'rgba(0,0,0,0.4)', padding: '4px 10px', borderRadius: '8px', zIndex: 10 },
   centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px' },
   menuBox: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)', padding: '40px', borderRadius: '28px', textAlign: 'center', width: '100%', maxWidth: '520px', boxShadow: '0 25px 50px rgba(0,0,0,0.6)' },
@@ -1188,7 +1295,7 @@ const styles = {
   panel: { background: '#1e1b4b', borderRadius: '16px', padding: '20px', overflowY: 'auto' },
   playerItem: { background: '#0f172a', padding: '12px', borderRadius: '10px', marginBottom: '8px', fontWeight: '700' },
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
-  gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
+  gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
   compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   compassRight: { position: 'fixed', right: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
