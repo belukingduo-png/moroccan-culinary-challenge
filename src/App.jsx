@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.7";
+const APP_VERSION = "v6.8";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -37,20 +37,20 @@ const PLATFORM_LAYOUT = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-// Organized ingredient piles and station stands
+// Organized ingredient piles and stations anchored on platforms
 const INITIAL_ITEMS = [
-  { id: 'item_1', x: 220, y: 130, type: '🍅', origin: { x: 220, y: 130 } },
-  { id: 'item_2', x: 500, y: 230, type: '🥩', origin: { x: 500, y: 230 } },
-  { id: 'item_3', x: 780, y: 140, type: '🧄', origin: { x: 780, y: 140 } },
-  { id: 'item_4', x: 1050, y: 260, type: '🌶️', origin: { x: 1050, y: 260 } },
-  { id: 'item_5', x: 400, y: 0, type: '🫖', origin: { x: 400, y: 0 } },
-  { id: 'item_6', x: 1200, y: 0, type: '🥖', origin: { x: 1200, y: 0 } }
+  { id: 'item_1', x: 220, y: 130 + 35, type: '🍅', origin: { x: 220, y: 130 + 35 } },
+  { id: 'item_2', x: 500, y: 230 + 35, type: '🥩', origin: { x: 500, y: 230 + 35 } },
+  { id: 'item_3', x: 780, y: 140 + 35, type: '🧄', origin: { x: 780, y: 140 + 35 } },
+  { id: 'item_4', x: 1050, y: 260 + 35, type: '🌶️', origin: { x: 1050, y: 260 + 35 } },
+  { id: 'item_5', x: 200, y: 0, type: '🫖', origin: { x: 200, y: 0 } },
+  { id: 'item_6', x: 1350, y: 170 + 35, type: '🥖', origin: { x: 1350, y: 170 + 35 } }
 ];
 
 const STATIONS = {
-  cuttingBoard: { x: 650, y: 140 },
-  pot: { x: 1150, y: 260 },
-  counter: { x: 1700, y: 0 }
+  cuttingBoard: { x: 500, offsetFromGround: 230 }, // Placed on platform 2
+  pot: { x: 1050, offsetFromGround: 260 },           // Placed on platform 4
+  counter: { x: 1950, offsetFromGround: 180 }        // Placed on final platform
 };
 
 const SPRITE_STATES = {
@@ -112,7 +112,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.7 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.8 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -190,8 +190,17 @@ export default function App() {
     const px = posRef.current.x;
     const py = posRef.current.y;
 
+    const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
+    const cbWorldY = floorY - cbPlatform.offsetFromGround - 24;
+
+    const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+    const potWorldY = floorY - potPlatform.offsetFromGround - 24;
+
+    const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
+    const counterWorldY = floorY - counterPlatform.offsetFromGround - 24;
+
     // 1. Serving Counter
-    if (Math.abs(px - STATIONS.counter.x) < 50) {
+    if (Math.abs(px - STATIONS.counter.x) < 50 && Math.abs(py - counterWorldY) < 50) {
       if (stationRef.current.potItem && stationRef.current.potItem.state === 'cooked' && !holdingItem) {
         setHoldingItem(stationRef.current.potItem.type);
         const updatedStations = { ...stationRef.current, potItem: null };
@@ -210,9 +219,7 @@ export default function App() {
     }
 
     // 2. Cutting Board Stand
-    const cbX = STATIONS.cuttingBoard.x;
-    const cbY = floorY - STATIONS.cuttingBoard.y;
-    if (Math.abs(px - cbX) < 50 && Math.abs(py - cbY) < 50) {
+    if (Math.abs(px - STATIONS.cuttingBoard.x) < 50 && Math.abs(py - cbWorldY) < 50) {
       if (holdingItem && !stationRef.current.cuttingBoardItem) {
         const newItem = { type: holdingItem, state: 'chopped' };
         setHoldingItem(null);
@@ -232,9 +239,7 @@ export default function App() {
     }
 
     // 3. Cooking Pot Stand
-    const potX = STATIONS.pot.x;
-    const potY = floorY - STATIONS.pot.y;
-    if (Math.abs(px - potX) < 50 && Math.abs(py - potY) < 50) {
+    if (Math.abs(px - STATIONS.pot.x) < 50 && Math.abs(py - potWorldY) < 50) {
       if (holdingItem && !stationRef.current.potItem) {
         const newItem = { type: holdingItem, state: 'cooked' };
         setHoldingItem(null);
@@ -269,7 +274,6 @@ export default function App() {
       setWorldItems(updatedItems);
       if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), updatedItems);
     } else {
-      // If holding an item and standing near an item's origin spot, return it to empty hand
       const targetOrigin = itemsRef.current.find(item => {
         const origWorldY = item.origin.y === 0 ? floorY : floorY - item.origin.y;
         return Math.hypot(px - item.origin.x, py - origWorldY) < 50;
@@ -364,12 +368,13 @@ export default function App() {
         jumpsRef.current = 2;
       }
 
+      // One-way platform check (can jump up through platforms, land on top)
       if (vy >= 0) {
         for (let i = 0; i < PLATFORM_LAYOUT.length; i++) {
           const plat = PLATFORM_LAYOUT[i];
           const platTop = floorY - plat.offsetFromGround;
           const withinX = px + HITBOX_HALF_W > plat.x && px - HITBOX_HALF_W < plat.x + plat.w;
-          const crossedTop = prevY <= platTop + 4 && py >= platTop;
+          const crossedTop = prevY <= platTop + 6 && py >= platTop;
 
           if (withinX && crossedTop) {
             py = platTop;
@@ -481,6 +486,15 @@ export default function App() {
   const zoom = 1.35;
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
   const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 60));
+
+  const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
+  const cbTop = floorY - cbPlatform.offsetFromGround - 24;
+
+  const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+  const potTop = floorY - potPlatform.offsetFromGround - 24;
+
+  const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
+  const counterTop = floorY - counterPlatform.offsetFromGround - 24;
 
   return (
     <div style={styles.appContainer}>
@@ -656,8 +670,8 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Stand with Knife & Stand Design */}
-            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${floorY - STATIONS.cuttingBoard.y - 32}px`, textAlign: 'center' }}>
+            {/* Cutting Board Station on Platform */}
+            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div style={styles.cuttingBoardTop}>
                   {stationState.cuttingBoardItem && (
@@ -673,8 +687,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Stand with Fire Underneath */}
-            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${floorY - STATIONS.pot.y - 48}px`, textAlign: 'center' }}>
+            {/* Cooking Pot Station on Platform */}
+            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-8px' }}>
                   🍲
@@ -692,8 +706,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Serving Counter Station */}
-            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 40}px`, top: `${floorY - 50}px`, textAlign: 'center' }}>
+            {/* Serving Counter Station on Platform */}
+            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 40}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               <div style={{ fontSize: '3rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
