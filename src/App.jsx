@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, onValue, update } from 'firebase/database';
+import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v5.1";
+const APP_VERSION = "v5.2";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,8 +16,6 @@ try {
   console.warn("Firebase error:", e);
 }
 
-const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀'];
-
 const RANDOM_NAMES = [
   "Chef Zellige", "SaffronMaster", "BaguetteBoss", "TajineKing", "MintTeaPro",
   "CouscousChief", "HarissaHero", "OliveOven", "SpiceSamurai", "KitchenKnight"
@@ -25,34 +23,89 @@ const RANDOM_NAMES = [
 
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
+// Expanded 2400px wide world platforms
+const WORLD_WIDTH = 2400;
 const PLATFORMS = [
-  { x: 80, y: 340, w: 160, h: 22 },
-  { x: 300, y: 260, w: 200, h: 22 },
-  { x: 560, y: 340, w: 180, h: 22 },
-  { x: 780, y: 220, w: 160, h: 22 }
+  { x: 180, y: 360, w: 180, h: 24 },
+  { x: 440, y: 270, w: 200, h: 24 },
+  { x: 720, y: 350, w: 180, h: 24 },
+  { x: 980, y: 230, w: 220, h: 24 },
+  { x: 1300, y: 320, w: 200, h: 24 },
+  { x: 1600, y: 210, w: 180, h: 24 },
+  { x: 1880, y: 310, w: 240, h: 24 }
 ];
+
+// Sprite sheet coordinates based on 6 columns x 5 rows layout
+const SPRITE_FRAMES = {
+  idle: [
+    { col: 0, row: 0 },
+    { col: 1, row: 0 },
+    { col: 2, row: 0 },
+    { col: 3, row: 0 }
+  ],
+  run: [
+    { col: 0, row: 2 },
+    { col: 1, row: 2 },
+    { col: 2, row: 2 },
+    { col: 3, row: 2 }
+  ],
+  jump: [
+    { col: 0, row: 3 },
+    { col: 1, row: 3 },
+    { col: 2, row: 3 }
+  ]
+};
+
+function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
+  const frames = SPRITE_FRAMES[anim] || SPRITE_FRAMES.idle;
+  const currentFrame = frames[frameTick % frames.length];
+
+  // 6 columns (0..5 -> 0%, 20%, 40%, 60%, 80%, 100%)
+  // 5 rows (0..4 -> 0%, 25%, 50%, 75%, 100%)
+  const posX = currentFrame.col * 20;
+  const posY = currentFrame.row * 25;
+
+  return (
+    <div
+      style={{
+        width: '56px',
+        height: '56px',
+        backgroundImage: 'url("/chef_sprite.png")',
+        backgroundSize: '600% 500%',
+        backgroundPosition: `${posX}% ${posY}%`,
+        imageRendering: 'pixelated',
+        transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
+        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))'
+      }}
+    />
+  );
+}
 
 export default function App() {
   const [screen, setScreen] = useState('home');
   const [playerName, setPlayerName] = useState('');
-  const [playerEmoji, setPlayerEmoji] = useState('🧑‍🍳');
   const [roomCode, setRoomCode] = useState('');
   const [isHost, setIsHost] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const [players, setPlayers] = useState({});
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.1 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v5.2 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  const [pos, setPos] = useState({ x: 100, y: 400 });
-  const [vel, setVel] = useState({ x: 0, y: 0 });
+  const [pos, setPos] = useState({ x: 120, y: 450 });
   const [isGrounded, setIsGrounded] = useState(false);
   const [jumpsLeft, setJumpsLeft] = useState(2);
-  const [animState, setAnimState] = useState('idle'); // idle, run, jump
+  const [animState, setAnimState] = useState('idle');
+  const [facingRight, setFacingRight] = useState(true);
+  const [frameTick, setFrameTick] = useState(0);
+  const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
 
-  const posRef = useRef({ x: 100, y: 400 });
+  const posRef = useRef({ x: 120, y: 450 });
   const velRef = useRef({ x: 0, y: 0 });
+  const groundedRef = useRef(false);
+  const jumpsRef = useRef(2);
+  const facingRef = useRef(true);
   const keysPressed = useRef({});
 
   const backgroundParticles = useMemo(() => {
@@ -65,26 +118,38 @@ export default function App() {
     }));
   }, []);
 
+  // Track window resize for camera centering
+  useEffect(() => {
+    const handleResize = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Sprite animation frame ticker
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+    const animTimer = setInterval(() => {
+      setFrameTick(prev => prev + 1);
+    }, 110);
+    return () => clearInterval(animTimer);
+  }, [gameState]);
+
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getRandomProfile = () => {
-    const name = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
-    const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-    return { name, emoji };
-  };
+  const getRandomName = () => RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 
-  const syncMyState = (newPos, currentAnim) => {
+  const syncMyState = (newPos, currentAnim, isRight) => {
     if (db && roomCode && !isHost) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
         x: newPos.x,
         y: newPos.y,
         name: playerName,
-        emoji: playerEmoji,
-        anim: currentAnim
+        anim: currentAnim,
+        facingRight: isRight
       });
     }
   };
@@ -93,11 +158,11 @@ export default function App() {
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
 
-    const gravity = 0.55;
+    const gravity = 0.6;
     const friction = 0.82;
-    const moveSpeed = 1.3;
+    const moveSpeed = 1.4;
     const floorY = 460;
-    const maxWorldWidth = 1050; // Expanded world width so right side is not blocked
+    const spriteSize = 56;
 
     const interval = setInterval(() => {
       let vx = velRef.current.x;
@@ -105,14 +170,17 @@ export default function App() {
       let px = posRef.current.x;
       let py = posRef.current.y;
       let currentAnim = 'idle';
+      let isRight = facingRef.current;
 
       if (keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A']) {
         vx -= moveSpeed;
         currentAnim = 'run';
+        isRight = false;
       }
       if (keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D']) {
         vx += moveSpeed;
         currentAnim = 'run';
+        isRight = true;
       }
 
       vx *= friction;
@@ -126,19 +194,21 @@ export default function App() {
         py = floorY;
         vy = 0;
         grounded = true;
+        jumpsRef.current = 2;
       }
 
       PLATFORMS.forEach(plat => {
         if (
-          px + 36 > plat.x &&
-          px < plat.x + plat.w &&
-          py + 44 >= plat.y &&
-          py + 44 <= plat.y + 18 &&
+          px + spriteSize - 10 > plat.x &&
+          px + 10 < plat.x + plat.w &&
+          py + spriteSize >= plat.y &&
+          py + spriteSize <= plat.y + 20 &&
           vy > 0
         ) {
-          py = plat.y - 44;
+          py = plat.y - spriteSize;
           vy = 0;
           grounded = true;
+          jumpsRef.current = 2;
         }
       });
 
@@ -146,17 +216,22 @@ export default function App() {
         currentAnim = 'jump';
       }
 
-      // Map boundaries
+      // World boundaries
       if (px < 0) px = 0;
-      if (px > maxWorldWidth - 44) px = maxWorldWidth - 44;
+      if (px > WORLD_WIDTH - spriteSize) px = WORLD_WIDTH - spriteSize;
 
       posRef.current = { x: px, y: py };
       velRef.current = { x: vx, y: vy };
-      setIsGrounded(grounded);
-      setAnimState(currentAnim);
+      groundedRef.current = grounded;
+      facingRef.current = isRight;
 
       setPos({ x: px, y: py });
-      syncMyState({ x: px, y: py }, currentAnim);
+      setIsGrounded(grounded);
+      setJumpsLeft(jumpsRef.current);
+      setAnimState(currentAnim);
+      setFacingRight(isRight);
+
+      syncMyState({ x: px, y: py }, currentAnim, isRight);
     }, 20);
 
     return () => clearInterval(interval);
@@ -168,16 +243,11 @@ export default function App() {
       if (gameState !== 'playing' || isHost) return;
       keysPressed.current[e.key] = true;
 
-      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+      if ((e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
-        if (isGrounded) {
-          velRef.current.y = -11;
-          setIsGrounded(false);
-          setJumpsLeft(1);
-        } else if (jumpsLeft > 0) {
-          velRef.current.y = -10; // Double jump
-          setJumpsLeft(0);
-        }
+        velRef.current.y = -12;
+        jumpsRef.current -= 1;
+        setJumpsLeft(jumpsRef.current);
       }
     };
 
@@ -191,7 +261,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isHost, isGrounded, jumpsLeft]);
+  }, [gameState, isHost]);
 
   // Firebase sync
   useEffect(() => {
@@ -216,11 +286,10 @@ export default function App() {
 
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const profile = getRandomProfile();
+    const name = getRandomName();
     setRoomCode(code);
     setIsHost(true);
-    setPlayerName(profile.name);
-    setPlayerEmoji(profile.emoji);
+    setPlayerName(name);
     setScreen('host_lobby');
 
     if (db) {
@@ -235,21 +304,23 @@ export default function App() {
     e.preventDefault();
     if (!roomCode) return;
     setIsHost(false);
-    const profile = getRandomProfile();
-    setPlayerName(profile.name);
-    setPlayerEmoji(profile.emoji);
+    const name = getRandomName();
+    setPlayerName(name);
     setScreen('player_lobby');
 
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
-        name: profile.name,
-        emoji: profile.emoji,
-        x: 100,
-        y: 400,
-        anim: 'idle'
+        name: name,
+        x: 120,
+        y: 450,
+        anim: 'idle',
+        facingRight: true
       });
     }
   };
+
+  // Calculate camera offset to keep local player centered in viewport
+  const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w, pos.x - viewport.w / 2 + 28));
 
   return (
     <div style={styles.appContainer}>
@@ -328,7 +399,7 @@ export default function App() {
               {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs...</p> : (
                 Object.keys(players).map(id => (
                   <div key={id} style={styles.playerItem}>
-                    <span>{players[id].emoji} {players[id].name}</span>
+                    <span>👨‍🍳 {players[id].name}</span>
                   </div>
                 ))
               )}
@@ -349,37 +420,72 @@ export default function App() {
         <div style={styles.centeredWrapper}>
           <div style={styles.menuBox}>
             <h3>Salon : {roomCode}</h3>
-            <p style={{ color: '#38bdf8', fontSize: '1.3rem', margin: '20px 0', fontWeight: '800' }}>{playerEmoji} {playerName}</p>
+            <div style={{ display: 'flex', justifyContent: 'center', margin: '15px 0' }}>
+              <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
+            </div>
+            <p style={{ color: '#38bdf8', fontSize: '1.3rem', margin: '10px 0 20px 0', fontWeight: '800' }}>{playerName}</p>
             <p style={{ color: '#94a3b8' }}>⏳ En attente du démarrage par l'hôte...</p>
           </div>
         </div>
       )}
 
-      {/* ACTIVE GAME SCREEN */}
+      {/* ACTIVE GAME SCREEN WITH PLAYER-CENTERED CAMERA */}
       {!isHost && gameState === 'playing' && (
         <div style={styles.gameContainer}>
-          {/* Platforms */}
-          {PLATFORMS.map((p, idx) => (
-            <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` }} />
-          ))}
+          {/* HUD Info */}
+          <div style={styles.hudBar}>
+            <span>📍 Position: {Math.round(pos.x)}m</span>
+            <span>🦘 Sauts: {jumpsLeft}/2</span>
+          </div>
 
-          {/* Ground */}
-          <div style={styles.ground} />
+          {/* Scrolling World Container */}
+          <div
+            style={{
+              ...styles.worldLayer,
+              width: `${WORLD_WIDTH}px`,
+              transform: `translateX(-${cameraX}px)`
+            }}
+          >
+            {/* Parallax Clouds & Scenery */}
+            <div style={{ ...styles.cloud, left: '150px', top: '60px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '620px', top: '90px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
 
-          {/* Render Players */}
-          {Object.keys(players).map(pid => {
-            const p = players[pid];
-            const isMe = pid === myId;
-            const px = isMe ? pos.x : (p.x || 100);
-            const py = isMe ? pos.y : (p.y || 400);
+            {/* Decorative Bushes */}
+            <div style={{ ...styles.bush, left: '80px', width: '110px' }} />
+            <div style={{ ...styles.bush, left: '650px', width: '140px' }} />
+            <div style={{ ...styles.bush, left: '1220px', width: '120px' }} />
+            <div style={{ ...styles.bush, left: '1850px', width: '160px' }} />
 
-            return (
-              <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
-                <div style={{ fontSize: '2.4rem' }}>{p.emoji || playerEmoji}</div>
-                <div style={styles.tag}>{p.name || playerName}</div>
-              </div>
-            );
-          })}
+            {/* Platforms */}
+            {PLATFORMS.map((p, idx) => (
+              <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` }} />
+            ))}
+
+            {/* Ground */}
+            <div style={styles.ground} />
+
+            {/* Render All Players */}
+            {Object.keys(players).map(pid => {
+              const p = players[pid];
+              const isMe = pid === myId;
+              const px = isMe ? pos.x : (p.x || 120);
+              const py = isMe ? pos.y : (p.y || 450);
+              const pAnim = isMe ? animState : (p.anim || 'idle');
+              const pFacing = isMe ? facingRight : (p.facingRight !== undefined ? p.facingRight : true);
+
+              return (
+                <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
+                  <div style={{ ...styles.tag, border: isMe ? '1.5px solid #fbbf24' : 'none' }}>
+                    {p.name || playerName}
+                  </div>
+                  <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} />
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -406,9 +512,13 @@ const styles = {
   panel: { background: '#1e1b4b', borderRadius: '16px', padding: '20px', overflowY: 'auto' },
   playerItem: { background: '#0f172a', padding: '12px', borderRadius: '10px', marginBottom: '8px', fontWeight: '700' },
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
-  gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #bae6fd 60%, #86efac 60%)' },
-  platform: { position: 'absolute', background: '#15803d', border: '3px solid #166534', borderRadius: '8px', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' },
-  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: '#166534', borderTop: '6px solid #22c55e' },
-  playerNode: { position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'top 0.05s linear, left 0.05s linear' },
-  tag: { background: 'rgba(0,0,0,0.6)', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '800', whiteSpace: 'nowrap' }
+  gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
+  hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh', transition: 'transform 0.05s linear' },
+  cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
+  bush: { position: 'absolute', bottom: '80px', height: '36px', background: '#4ade80', border: '3px solid #16a34a', borderRadius: '12px 12px 0 0' },
+  platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
+  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 16px, #78350f 16px, #78350f 32px)', borderTop: '8px solid #22c55e' },
+  playerNode: { position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
+  tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' }
 };
