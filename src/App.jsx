@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v7.1";
+const APP_VERSION = "v7.2";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -38,18 +38,14 @@ const PLATFORM_LAYOUT = [
 ];
 
 const INITIAL_ITEMS = [
-  { id: 'item_1', x: 220, y: 130 + 35, type: '🍅', origin: { x: 220, y: 130 + 35 } },
-  { id: 'item_2', x: 500, y: 230 + 35, type: '🥩', origin: { x: 500, y: 230 + 35 } },
-  { id: 'item_3', x: 780, y: 140 + 35, type: '🧄', origin: { x: 780, y: 140 + 35 } },
-  { id: 'item_4', x: 1050, y: 260 + 35, type: '🌶️', origin: { x: 1050, y: 260 + 35 } },
-  { id: 'item_5', x: 200, y: 0, type: '🫖', origin: { x: 200, y: 0 } },
-  { id: 'item_6', x: 1350, y: 170 + 35, type: '🥖', origin: { x: 1350, y: 170 + 35 } }
+  { id: 'item_1', x: 220, y: 130 + 12, type: '🍅', origin: { x: 220, y: 130 + 12 } },
+  { id: 'item_2', x: 780, y: 140 + 12, type: '🧄', origin: { x: 780, y: 140 + 12 } },
+  { id: 'item_3', x: 1350, y: 170 + 12, type: '🥖', origin: { x: 1350, y: 170 + 12 } }
 ];
 
 const STATIONS = {
   cuttingBoard: { x: 500, offsetFromGround: 230 },
-  pot1: { x: 1050, offsetFromGround: 260 },
-  pot2: { x: 1600, offsetFromGround: 270 },
+  pot: { x: 1050, offsetFromGround: 260 },
   counter: { x: 1950, offsetFromGround: 180 }
 };
 
@@ -107,15 +103,13 @@ export default function App() {
   const [stationState, setStationState] = useState({
     cuttingBoardItem: null,
     cuttingBoardActive: false,
-    pot1Item: null,
-    pot1Cooking: false,
-    pot2Item: null,
-    pot2Cooking: false,
+    potItem: null,
+    potCooking: false,
     servedDishes: 0
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v7.1 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v7.2 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -196,11 +190,8 @@ export default function App() {
     const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
     const cbWorldY = floorY - cbPlatform.offsetFromGround - 24;
 
-    const pot1Platform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot1.offsetFromGround);
-    const pot1WorldY = floorY - pot1Platform.offsetFromGround - 24;
-
-    const pot2Platform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot2.offsetFromGround);
-    const pot2WorldY = floorY - pot2Platform.offsetFromGround - 24;
+    const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+    const potWorldY = floorY - potPlatform.offsetFromGround - 24;
 
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround - 24;
@@ -244,25 +235,25 @@ export default function App() {
       }
     }
 
-    // 3. Pot 1 (3 seconds cook timer)
-    if (Math.abs(px - STATIONS.pot1.x) < 50 && Math.abs(py - pot1WorldY) < 50) {
-      if (holdingItem && !stationRef.current.pot1Item && !stationRef.current.pot1Cooking) {
+    // 3. Pot (3 seconds cook timer)
+    if (Math.abs(px - STATIONS.pot.x) < 50 && Math.abs(py - potWorldY) < 50) {
+      if (holdingItem && !stationRef.current.potItem && !stationRef.current.potCooking) {
         setHoldingItem(null);
-        const updatedStations = { ...stationRef.current, pot1Cooking: true };
+        const updatedStations = { ...stationRef.current, potCooking: true };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
         setTimeout(() => {
           const finished = { type: '🍲 Tajine', state: 'cooked' };
-          stationRef.current = { ...stationRef.current, pot1Item: finished, pot1Cooking: false };
+          stationRef.current = { ...stationRef.current, potItem: finished, potCooking: false };
           setStationState(stationRef.current);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
         }, 3000);
         return;
-      } else if (!holdingItem && stationRef.current.pot1Item && stationRef.current.pot1Item.state === 'cooked') {
-        setHoldingItem(stationRef.current.pot1Item.type);
-        const updatedStations = { ...stationRef.current, pot1Item: null };
+      } else if (!holdingItem && stationRef.current.potItem && stationRef.current.potItem.state === 'cooked') {
+        setHoldingItem(stationRef.current.potItem.type);
+        const updatedStations = { ...stationRef.current, potItem: null };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
@@ -270,33 +261,7 @@ export default function App() {
       }
     }
 
-    // 4. Pot 2 (3 seconds cook timer)
-    if (Math.abs(px - STATIONS.pot2.x) < 50 && Math.abs(py - pot2WorldY) < 50) {
-      if (holdingItem && !stationRef.current.pot2Item && !stationRef.current.pot2Cooking) {
-        setHoldingItem(null);
-        const updatedStations = { ...stationRef.current, pot2Cooking: true };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-
-        setTimeout(() => {
-          const finished = { type: '🍲 Soup', state: 'cooked' };
-          stationRef.current = { ...stationRef.current, pot2Item: finished, pot2Cooking: false };
-          setStationState(stationRef.current);
-          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
-        }, 3000);
-        return;
-      } else if (!holdingItem && stationRef.current.pot2Item && stationRef.current.pot2Item.state === 'cooked') {
-        setHoldingItem(stationRef.current.pot2Item.type);
-        const updatedStations = { ...stationRef.current, pot2Item: null };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        return;
-      }
-    }
-
-    // 5. Pickup from World Items or Return to Origin Spot
+    // 4. Pickup from World Items or Return to Origin Spot
     if (!holdingItem) {
       const updatedItems = itemsRef.current.map(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
@@ -491,7 +456,7 @@ export default function App() {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         items: INITIAL_ITEMS,
-        stations: { cuttingBoardItem: null, cuttingBoardActive: false, pot1Item: null, pot1Cooking: false, pot2Item: null, pot2Cooking: false, servedDishes: 0 },
+        stations: { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: 0 },
         logs: [`👑 Salon ${code} ouvert`]
       });
     }
@@ -528,11 +493,8 @@ export default function App() {
   const cbPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.cuttingBoard.offsetFromGround);
   const cbTop = floorY - cbPlatform.offsetFromGround - 34;
 
-  const pot1Platform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot1.offsetFromGround);
-  const pot1Top = floorY - pot1Platform.offsetFromGround - 48;
-
-  const pot2Platform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot2.offsetFromGround);
-  const pot2Top = floorY - pot2Platform.offsetFromGround - 48;
+  const potPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.pot.offsetFromGround);
+  const potTop = floorY - potPlatform.offsetFromGround - 48;
 
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 54;
@@ -746,37 +708,18 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot 1 on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.pot1.x - 35}px`, top: `${pot1Top}px`, textAlign: 'center' }}>
+            {/* Cooking Pot Station on Platform */}
+            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
-                <div className={stationState.pot1Cooking ? "boiling-pot" : ""} style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-12px' }}>
+                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-12px' }}>
                   🍲
                 </div>
-                {stationState.pot1Item && !stationState.pot1Cooking && (
+                {stationState.potItem && !stationState.potCooking && (
                   <div style={{ position: 'absolute', top: '-14px', left: '22px', fontSize: '1.6rem' }}>
-                    {stationState.pot1Item.type}
+                    {stationState.potItem.type}
                   </div>
                 )}
-                {stationState.pot1Cooking && (
-                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-16px', left: '18px', fontSize: '1.4rem' }}>
-                    🔥 🔥
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Cooking Pot 2 on Platform */}
-            <div style={{ position: 'absolute', left: `${STATIONS.pot2.x - 35}px`, top: `${pot2Top}px`, textAlign: 'center' }}>
-              <div style={styles.stationStand}>
-                <div className={stationState.pot2Cooking ? "boiling-pot" : ""} style={{ fontSize: '3.5rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-12px' }}>
-                  🍲
-                </div>
-                {stationState.pot2Item && !stationState.pot2Cooking && (
-                  <div style={{ position: 'absolute', top: '-14px', left: '22px', fontSize: '1.6rem' }}>
-                    {stationState.pot2Item.type}
-                  </div>
-                )}
-                {stationState.pot2Cooking && (
+                {stationState.potCooking && (
                   <div className="fire-stand" style={{ position: 'absolute', bottom: '-16px', left: '18px', fontSize: '1.4rem' }}>
                     🔥 🔥
                   </div>
