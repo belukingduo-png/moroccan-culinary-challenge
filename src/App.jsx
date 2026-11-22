@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.3";
+const APP_VERSION = "v6.4";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -44,7 +44,6 @@ const STATIONS = {
   counter: { x: 1700, y: 0 }
 };
 
-// Verified full-body sprite sheet coordinates
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 15, w: 34, h: 45 }],
   run: [{ x: 35, y: 110, w: 36, h: 45 }, { x: 74, y: 110, w: 36, h: 45 }],
@@ -103,7 +102,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.3 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.4 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -462,6 +461,7 @@ export default function App() {
 
   const floorY = viewport.h - GROUND_HEIGHT;
   const zoom = 1.5;
+  // Perfectly center camera on player position
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
 
   return (
@@ -491,19 +491,19 @@ export default function App() {
         }
         @keyframes chopKnife {
           0% { transform: translateY(0px) rotate(-20deg); }
-          50% { transform: translateY(-12px) rotate(15deg); }
+          50% { transform: translateY(-10px) rotate(10deg); }
           100% { transform: translateY(0px) rotate(-20deg); }
         }
         .chopping-knife {
-          animation: chopKnife 0.3s ease-in-out infinite;
+          animation: chopKnife 0.25s ease-in-out infinite;
         }
         @keyframes boilPot {
           0% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+          50% { transform: scale(1.08); }
           100% { transform: scale(1); }
         }
         .boiling-pot {
-          animation: boilPot 0.6s ease-in-out infinite;
+          animation: boilPot 0.5s ease-in-out infinite;
         }
       `}</style>
 
@@ -630,29 +630,32 @@ export default function App() {
               );
             })}
 
-            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 40}px`, top: `${floorY - STATIONS.cuttingBoard.y - 36}px`, textAlign: 'center' }}>
-              <div style={styles.stationBoard}>🪵 Cutting Board</div>
+            {/* Cutting Board Station (No text, pure board graphic + conditional chopping animation) */}
+            <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 25}px`, top: `${floorY - STATIONS.cuttingBoard.y - 20}px`, textAlign: 'center' }}>
+              <div style={styles.cuttingBoardGraphic} />
               {stationState.cuttingBoardItem && (
-                <div style={{ position: 'absolute', top: '-30px', left: '25px', fontSize: '1.6rem' }}>
+                <div style={{ position: 'absolute', top: '-28px', left: '10px', fontSize: '1.6rem' }}>
                   {stationState.cuttingBoardItem.type}
-                  <span className="chopping-knife" style={{ position: 'absolute', left: '15px', top: '-10px', fontSize: '1.2rem' }}>🔪</span>
+                  <span className="chopping-knife" style={{ position: 'absolute', left: '14px', top: '-10px', fontSize: '1.3rem' }}>🔪</span>
                 </div>
               )}
             </div>
 
-            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 40}px`, top: `${floorY - STATIONS.pot.y - 42}px`, textAlign: 'center' }}>
-              <div className={stationState.potCooking ? "boiling-pot" : ""} style={styles.stationPot}>
-                🍲 Pot {stationState.potCooking ? '(Cuisson...)' : ''}
+            {/* Cooking Pot Station (Big pot image emoji, boils only when cooking) */}
+            <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 30}px`, top: `${floorY - STATIONS.pot.y - 40}px`, textAlign: 'center' }}>
+              <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>
+                🍲
               </div>
-              {stationState.potItem && (
-                <div style={{ position: 'absolute', top: '-30px', left: '30px', fontSize: '1.6rem' }}>
+              {stationState.potItem && !stationState.potCooking && (
+                <div style={{ position: 'absolute', top: '-10px', left: '15px', fontSize: '1.5rem' }}>
                   {stationState.potItem.type}
                 </div>
               )}
             </div>
 
-            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 50}px`, top: `${floorY - 60}px`, textAlign: 'center' }}>
-              <div style={styles.counterBox}>🛎️ Serving Counter</div>
+            {/* Serving Counter Station */}
+            <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 40}px`, top: `${floorY - 50}px`, textAlign: 'center' }}>
+              <div style={{ fontSize: '3rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
             {worldItems.map((item, idx) => {
@@ -745,7 +748,5 @@ const styles = {
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
   holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
-  stationBoard: { background: '#92400e', color: '#fef3c7', padding: '4px 10px', borderRadius: '8px', fontWeight: '800', border: '2px solid #78350f', fontSize: '0.75rem', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
-  stationPot: { background: '#374151', color: '#f3f4f6', padding: '4px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #1f2937', fontSize: '0.75rem', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
-  counterBox: { background: '#b45309', color: '#fff', padding: '6px 14px', borderRadius: '10px', fontWeight: '900', border: '3px solid #78350f', fontSize: '0.8rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }
+  cuttingBoardGraphic: { width: '50px', height: '16px', background: '#92400e', border: '2px solid #78350f', borderRadius: '6px', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }
 };
