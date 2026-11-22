@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.1";
+const APP_VERSION = "v8.2";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.1 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.2 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -255,7 +255,7 @@ export default function App() {
           setBannerStatus('neutral');
           setBannerFading(false);
         }, 350);
-      }, 650);
+      }, 550);
     } else if (status === 'error') {
       setScore(prev => Math.max(0, prev - 20));
       setTimeout(() => {
@@ -346,6 +346,7 @@ export default function App() {
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
+    // 1. Serving Counter
     if (Math.abs(px - STATIONS.counter.x) < 55 && Math.abs(py - counterWorldY) < 55) {
       if (holdingItem && holdingState === 'cooked' && questStep === 3) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
@@ -362,6 +363,7 @@ export default function App() {
       return;
     }
 
+    // 2. Cutting Board Station
     if (Math.abs(px - STATIONS.cuttingBoard.x) < 55 && Math.abs(py - cbWorldY) < 55) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'raw' && questStep === 1) {
         const itemType = holdingItem;
@@ -377,6 +379,7 @@ export default function App() {
       return;
     }
 
+    // 3. Pot Station
     if (Math.abs(px - STATIONS.pot.x) < 55 && Math.abs(py - potWorldY) < 55) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'chopped' && questStep === 2) {
         const itemType = holdingItem;
@@ -392,13 +395,14 @@ export default function App() {
       return;
     }
 
-    if (!holdingItem) {
+    // 4. Pickup from World Items (Fixed: instantly picks up and advances step 0 -> 1)
+    if (!holdingItem && questStep === 0) {
       let pickedItem = null;
       const updatedItems = itemsRef.current.map(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
         const dist = Math.hypot(px - item.x, py - itemWorldY);
-        if (dist < 48 && !pickedItem) {
-          if (questStep === 0 && item.type === currentRecipe.ingredient) {
+        if (dist < 55 && !pickedItem) {
+          if (item.type === currentRecipe.ingredient) {
             pickedItem = item;
             return null;
           } else {
