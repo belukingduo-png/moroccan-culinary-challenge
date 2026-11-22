@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.4";
+const APP_VERSION = "v8.5";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.4 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.5 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -166,6 +166,13 @@ export default function App() {
   const viewportRef = useRef(viewport);
   const itemsRef = useRef(INITIAL_ITEMS);
   const stationRef = useRef(stationState);
+  const questStepRef = useRef(questStep);
+  const holdingItemRef = useRef(holdingItem);
+  const holdingStateRef = useRef(holdingState);
+
+  useEffect(() => { questStepRef.current = questStep; }, [questStep]);
+  useEffect(() => { holdingItemRef.current = holdingItem; }, [holdingItem]);
+  useEffect(() => { holdingStateRef.current = holdingState; }, [holdingState]);
 
   const currentRecipe = RECIPES[recipeIndex % RECIPES.length];
 
@@ -235,32 +242,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeMinigame]);
 
-  const triggerQuestFeedback = (status, advanceStep = false) => {
+  const triggerQuestFeedback = (status, nextStepVal = null) => {
     setBannerStatus(status);
-    if (status === 'success' && advanceStep) {
+    if (status === 'success') {
       setTimeout(() => {
         setBannerFading(true);
         setTimeout(() => {
-          setQuestStep(prev => {
-            if (prev >= 3) {
-              const nextRecipeIdx = recipeIndex + 1;
-              setRecipeIndex(nextRecipeIdx);
-              setWorldItems(INITIAL_ITEMS);
-              itemsRef.current = INITIAL_ITEMS;
-              if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), INITIAL_ITEMS);
-              return 0;
-            }
-            return prev + 1;
-          });
+          if (nextStepVal !== null) {
+            setQuestStep(nextStepVal);
+          }
           setBannerStatus('neutral');
           setBannerFading(false);
-        }, 350);
-      }, 550);
+        }, 300);
+      }, 500);
     } else if (status === 'error') {
       setScore(prev => Math.max(0, prev - 20));
       setTimeout(() => {
         setBannerStatus('neutral');
-      }, 900);
+      }, 800);
     }
   };
 
@@ -279,7 +278,7 @@ export default function App() {
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', true);
+        triggerQuestFeedback('success', 2); // Advance to cooking step
       } else {
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
@@ -295,7 +294,7 @@ export default function App() {
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', true);
+        triggerQuestFeedback('success', 3); // Advance to serving step
       } else {
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
@@ -346,9 +345,13 @@ export default function App() {
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
-    // 1. Serving Counter
+    const curStep = questStepRef.current;
+    const curHolding = holdingItemRef.current;
+    const curState = holdingStateRef.current;
+
+    // 1. Serving Counter (Step 3)
     if (Math.abs(px - STATIONS.counter.x) < 70 && Math.abs(py - counterWorldY) < 70) {
-      if (holdingItem && holdingState === 'cooked' && questStep === 3) {
+      if (curHolding && curState === 'cooked' && curStep === 3) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
@@ -356,17 +359,21 @@ export default function App() {
         setHoldingState('raw');
         setScore(prev => prev + 100);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        triggerQuestFeedback('success', true);
+        setRecipeIndex(prev => prev + 1);
+        setWorldItems(INITIAL_ITEMS);
+        itemsRef.current = INITIAL_ITEMS;
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), INITIAL_ITEMS);
+        triggerQuestFeedback('success', 0); // Reset to Step 0 for next recipe
       } else {
-        triggerQuestFeedback('error', false);
+        triggerQuestFeedback('error');
       }
       return;
     }
 
-    // 2. Cutting Board Station (Generous hitbox range < 70px)
+    // 2. Cutting Board Station (Step 1)
     if (Math.abs(px - STATIONS.cuttingBoard.x) < 70 && Math.abs(py - cbWorldY) < 70) {
-      if (holdingItem === currentRecipe.ingredient && holdingState === 'raw' && questStep === 1) {
-        const itemType = holdingItem;
+      if (curHolding === currentRecipe.ingredient && curState === 'raw' && curStep === 1) {
+        const itemType = curHolding;
         setHoldingItem(null);
         const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
         stationRef.current = updatedStations;
@@ -374,15 +381,15 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame({ type: 'cut', itemType });
       } else {
-        triggerQuestFeedback('error', false);
+        triggerQuestFeedback('error');
       }
       return;
     }
 
-    // 3. Pot Station (Generous hitbox range < 70px)
+    // 3. Pot Station (Step 2)
     if (Math.abs(px - STATIONS.pot.x) < 70 && Math.abs(py - potWorldY) < 70) {
-      if (holdingItem === currentRecipe.ingredient && holdingState === 'chopped' && questStep === 2) {
-        const itemType = holdingItem;
+      if (curHolding === currentRecipe.ingredient && curState === 'chopped' && curStep === 2) {
+        const itemType = curHolding;
         setHoldingItem(null);
         const updatedStations = { ...stationRef.current, potCooking: true };
         stationRef.current = updatedStations;
@@ -390,13 +397,13 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame({ type: 'cook', itemType });
       } else {
-        triggerQuestFeedback('error', false);
+        triggerQuestFeedback('error');
       }
       return;
     }
 
-    // 4. Pickup from World Items (Very generous range < 90px & auto-forces questStep 0 -> 1)
-    if (!holdingItem && questStep === 0) {
+    // 4. Pickup from World Items (Step 0)
+    if (!curHolding && curStep === 0) {
       let pickedType = null;
       const remainingItems = itemsRef.current.filter(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
@@ -404,9 +411,9 @@ export default function App() {
         if (dist < 90 && !pickedType) {
           if (item.type === currentRecipe.ingredient) {
             pickedType = item.type;
-            return false;
+            return false; // Remove item from world
           } else {
-            triggerQuestFeedback('error', false);
+            triggerQuestFeedback('error');
           }
         }
         return true;
@@ -418,8 +425,7 @@ export default function App() {
         itemsRef.current = remainingItems;
         setWorldItems(remainingItems);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
-        setQuestStep(1); // Force advance immediately to cutting step
-        triggerQuestFeedback('success', false);
+        triggerQuestFeedback('success', 1); // Advance to Step 1 (Cutting)
       }
     }
   };
@@ -457,7 +463,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, holdingItem, holdingState, isHost, activeMinigame, countdown, questStep, recipeIndex]);
+  }, [gameState, isHost, activeMinigame, countdown, currentRecipe]);
 
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
@@ -544,11 +550,11 @@ export default function App() {
       setAnimState(currentAnim);
       setFacingRight(isRight);
 
-      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight, holdingItem);
+      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight, holdingItemRef.current);
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, holdingItem, isHost, countdown, activeMinigame]);
+  }, [gameState, isHost, countdown, activeMinigame]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
