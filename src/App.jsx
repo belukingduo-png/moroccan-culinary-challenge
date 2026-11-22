@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.2";
+const APP_VERSION = "v8.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.2 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.3 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -279,7 +279,7 @@ export default function App() {
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', questStep === 1);
+        triggerQuestFeedback('success', true);
       } else {
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
@@ -295,7 +295,7 @@ export default function App() {
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         setActiveMinigame(null);
-        triggerQuestFeedback('success', questStep === 2);
+        triggerQuestFeedback('success', true);
       } else {
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
@@ -395,29 +395,29 @@ export default function App() {
       return;
     }
 
-    // 4. Pickup from World Items (Fixed: instantly picks up and advances step 0 -> 1)
+    // 4. Pickup from World Items (Fixed: filters out the picked up item correctly and advances step 0 -> 1)
     if (!holdingItem && questStep === 0) {
-      let pickedItem = null;
-      const updatedItems = itemsRef.current.map(item => {
+      let pickedType = null;
+      const remainingItems = itemsRef.current.filter(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
         const dist = Math.hypot(px - item.x, py - itemWorldY);
-        if (dist < 55 && !pickedItem) {
+        if (dist < 60 && !pickedType) {
           if (item.type === currentRecipe.ingredient) {
-            pickedItem = item;
-            return null;
+            pickedType = item.type;
+            return false; // remove from world items
           } else {
             triggerQuestFeedback('error', false);
           }
         }
-        return item;
-      }).filter(Boolean);
+        return true;
+      });
 
-      if (pickedItem) {
-        setHoldingItem(pickedItem.type);
+      if (pickedType) {
+        setHoldingItem(pickedType);
         setHoldingState('raw');
-        itemsRef.current = updatedItems;
-        setWorldItems(updatedItems);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), updatedItems);
+        itemsRef.current = remainingItems;
+        setWorldItems(remainingItems);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         triggerQuestFeedback('success', true);
       }
     }
