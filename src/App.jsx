@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v4.2";
+const APP_VERSION = "v4.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -53,7 +53,7 @@ const RECIPES = [
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState('home'); // home, mode_select, host_lobby, player_lobby, play, gameover
+  const [screen, setScreen] = useState('home'); 
   const [playerName, setPlayerName] = useState('');
   const [playerEmoji, setPlayerEmoji] = useState('🧑‍🍳');
   const [roomCode, setRoomCode] = useState('');
@@ -66,7 +66,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.2 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.3 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -687,8 +687,14 @@ export default function App() {
       try {
         const snap = await get(ref(db, `rooms/${roomCode}/players`));
         existingPlayers = snap.val() || {};
-        const hasPrep = Object.values(existingPlayers).some(p => p.role === 'prep');
-        assignedRole = hasPrep ? 'cook' : 'prep';
+        const rolesTaken = Object.values(existingPlayers).map(p => p.role);
+        if (rolesTaken.includes('prep') && !rolesTaken.includes('cook')) {
+          assignedRole = 'cook';
+        } else if (rolesTaken.includes('cook') && !rolesTaken.includes('prep')) {
+          assignedRole = 'prep';
+        } else {
+          assignedRole = rolesTaken.length % 2 === 0 ? 'prep' : 'cook';
+        }
       } catch (err) {
         console.warn("Role check fallback:", err);
       }
@@ -758,7 +764,7 @@ export default function App() {
           0% { transform: translate(-50%, -30px); opacity: 0; }
           100% { transform: translate(-50%, 0); opacity: 1; }
         }
-        * { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        * { font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box; }
         .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .pulse-btn { animation: pulseGreen 2s infinite; }
@@ -795,7 +801,7 @@ export default function App() {
         </div>
       )}
 
-      {/* HOME SCREEN: Only Title and Flashing Green Play Button */}
+      {/* HOME SCREEN */}
       {screen === 'home' && (
         <div key="home" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
@@ -813,7 +819,7 @@ export default function App() {
         </div>
       )}
 
-      {/* MODE SELECT: Host or Join */}
+      {/* MODE SELECT */}
       {screen === 'mode_select' && (
         <div key="mode_select" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
@@ -899,46 +905,63 @@ export default function App() {
         </div>
       )}
 
-      {/* PLAYER LOBBY (CUSTOMIZABLE WHILE WAITING) */}
+      {/* PLAYER LOBBY: ZERO-SCROLL 2-COLUMN LAYOUT */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
-          <div style={styles.lobbyCard}>
-            <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
-            <h3 style={{ margin: '15px 0 10px 0', fontSize: '1.3rem', fontWeight: '800', color: '#fbbf24' }}>Personnalisez votre Chef :</h3>
-            
-            <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
-              <input
-                type="text"
-                value={playerName}
-                onChange={(e) => handleCustomizationChange(e.target.value, playerEmoji)}
-                style={styles.input}
-                placeholder="Votre nom de chef..."
-              />
+          <div style={styles.lobbyCardWide}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
+              <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fbbf24' }}>Salon : {roomCode}</div>
+              <div style={styles.roleBadgeInline}>
+                Rôle : <strong style={{ color: '#38bdf8' }}>{myRole === 'prep' ? '🔪 Chef Gauche' : '🍲 Chef Droit'}</strong>
+              </div>
             </div>
 
-            <div style={styles.emojiGrid}>
-              {EMOJIS.map((em) => (
-                <button
-                  key={em}
-                  type="button"
-                  onClick={() => handleCustomizationChange(playerName, em)}
-                  style={{
-                    ...styles.emojiBtn,
-                    borderColor: playerEmoji === em ? '#10b981' : 'rgba(255,255,255,0.1)',
-                    background: playerEmoji === em ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)'
-                  }}
-                >
-                  {em}
-                </button>
-              ))}
+            {/* 2-Column Split: Guide (Left) & Customization (Right) */}
+            <div style={styles.lobbyGrid}>
+              {/* Left Column: Guide */}
+              <div style={styles.guideBox}>
+                <h4 style={styles.guideTitle}>📖 Guide Rapide</h4>
+                <ul style={styles.guideList}>
+                  <li><strong>Chef Gauche :</strong> Prends les ingrédients (caisses) et découpe sur la planche 🔪.</li>
+                  <li><strong>Passe-Plats :</strong> Utilisez 🪟 pour passer les ingrédients entre vous !</li>
+                  <li><strong>Chef Droit :</strong> Cuit dans les pots 🍲/🫖 et sert au comptoir 🛎️.</li>
+                </ul>
+              </div>
+
+              {/* Right Column: Customization */}
+              <div style={styles.customBox}>
+                <h4 style={styles.guideTitle}>✏️ Personnalisez votre Chef</h4>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => handleCustomizationChange(e.target.value, playerEmoji)}
+                  style={styles.inputCompact}
+                  placeholder="Votre nom..."
+                />
+                <div style={styles.emojiGridCompact}>
+                  {EMOJIS.map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => handleCustomizationChange(playerName, em)}
+                      style={{
+                        ...styles.emojiBtnCompact,
+                        borderColor: playerEmoji === em ? '#10b981' : 'rgba(255,255,255,0.1)',
+                        background: playerEmoji === em ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)'
+                      }}
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div style={styles.roleBadgeContainer}>
-              Rôle Attribué : <strong style={{ color: '#38bdf8' }}>{myRole === 'prep' ? '🔪 Chef Côté Gauche (Préparation)' : '🍲 Chef Côté Droit (Cuisson & Service)'}</strong>
+            {/* Bottom Loading Overlay */}
+            <div style={styles.loadingFooter}>
+              <div style={styles.spinnerSmall}></div>
+              <span style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: '700' }}>⏳ En attente de l'hôte pour démarrer...</span>
             </div>
-
-            <div style={styles.spinner}></div>
-            <p style={{ marginTop: '14px', color: '#e2e8f0', fontSize: '1.1rem', fontWeight: '700' }}>⏳ En attente du démarrage par le Chef Principal...</p>
           </div>
         </div>
       )}
@@ -1152,15 +1175,27 @@ export default function App() {
 const styles = {
   appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', color: '#fff', position: 'relative' },
   versionBadge: { position: 'fixed', bottom: '12px', left: '16px', fontSize: '0.85rem', fontWeight: '800', color: 'rgba(255, 255, 255, 0.55)', background: 'rgba(0, 0, 0, 0.45)', padding: '4px 10px', borderRadius: '8px', zIndex: 100, pointerEvents: 'none', letterSpacing: '0.5px' },
-  centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px', boxSizing: 'border-box' },
-  heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '6px 16px', borderRadius: '20px', fontSize: '1rem', fontWeight: 'bold', marginBottom: '12px' },
-  mainGameTitle: { fontSize: 'clamp(2.4rem, 5vw, 3.5rem)', margin: '0 0 8px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 14px rgba(251, 191, 36, 0.35)' },
-  subSubtitle: { fontSize: '1.4rem', color: '#e2e8f0', marginBottom: '35px', fontWeight: '700', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '660px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  lobbyCard: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '30px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '580px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  roleBadgeContainer: { background: 'rgba(15, 23, 42, 0.8)', padding: '12px 18px', borderRadius: '14px', margin: '15px 0', border: '1px solid rgba(255,255,255,0.15)', fontSize: '1.1rem' },
-  resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.7)' },
+  centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px' },
+  mainGameTitle: { fontSize: 'clamp(2.2rem, 5vw, 3.2rem)', margin: '0 0 6px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 14px rgba(251, 191, 36, 0.35)' },
+  subSubtitle: { fontSize: '1.3rem', color: '#e2e8f0', marginBottom: '30px', fontWeight: '700', textAlign: 'center' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '620px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  
+  // Zero-scroll 2-column lobby styles
+  lobbyCardWide: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '24px 28px', borderRadius: '28px', width: '100%', maxWidth: '780px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  lobbyGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' },
+  guideBox: { background: 'rgba(15, 23, 42, 0.75)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+  customBox: { background: 'rgba(15, 23, 42, 0.75)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
+  guideTitle: { margin: '0 0 10px 0', fontSize: '1.05rem', fontWeight: '800', color: '#fbbf24' },
+  guideList: { margin: 0, paddingLeft: '16px', fontSize: '0.88rem', color: '#cbd5e1', lineHeight: '1.5', display: 'flex', flexDirection: 'column', gap: '6px' },
+  roleBadgeInline: { background: 'rgba(15, 23, 42, 0.8)', padding: '6px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', fontSize: '0.95rem' },
+  inputCompact: { width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1rem', background: 'rgba(15, 23, 42, 0.85)', color: '#fff', marginBottom: '10px' },
+  emojiGridCompact: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px', maxHeight: '100px', overflowY: 'auto' },
+  emojiBtnCompact: { fontSize: '1.3rem', padding: '6px', borderRadius: '10px', border: '1px solid', cursor: 'pointer' },
+  loadingFooter: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' },
+  spinnerSmall: { width: '22px', height: '22px', border: '3px solid rgba(255,255,255,0.15)', borderTop: '3px solid #10b981', borderRadius: '50%', animation: 'spin 1s linear infinite' },
+
+  resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
+  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', background: 'rgba(15, 23, 42, 0.7)' },
   hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', background: 'rgba(30, 27, 75, 0.88)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.12)' },
   hostMainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px', margin: '22px 0', minHeight: 0 },
   hostFooter: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 0' },
@@ -1174,8 +1209,6 @@ const styles = {
   playerItem: { background: 'rgba(15, 23, 42, 0.7)', padding: '14px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)' },
   lbBox: { maxHeight: '160px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '12px', padding: '10px', border: '1px solid rgba(255,255,255,0.12)' },
   lbItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', fontSize: '1rem', marginBottom: '6px' },
-  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '8px', margin: '10px 0 15px 0', maxHeight: '130px', overflowY: 'auto' },
-  emojiBtn: { fontSize: '1.6rem', padding: '8px', borderRadius: '12px', border: '1px solid', cursor: 'pointer' },
   primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)' },
   flashingPlayBtn: { fontSize: '1.6rem', padding: '20px', maxWidth: '360px', margin: '15px auto 0 auto' },
   secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)' },
@@ -1183,13 +1216,12 @@ const styles = {
   divider: { margin: '18px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.15)' },
   dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 10px', fontSize: '0.85rem', color: '#94a3b8', fontWeight: '800' },
   form: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  input: { width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.7)', color: '#fff', boxSizing: 'border-box' },
-  spinner: { width: '38px', height: '38px', border: '4px solid rgba(255,255,255,0.12)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
+  input: { width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.7)', color: '#fff' },
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   countdownText: { fontSize: '6rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 50px rgba(251, 191, 36, 0.7)', textAlign: 'center' },
-  gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
+  gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16' },
   header: { display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
-  timerBox: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700', width: '96px', textAlign: 'center', boxSizing: 'border-box' },
+  timerBox: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700', width: '96px', textAlign: 'center' },
   headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700' },
   dishHeaderTitle: { fontSize: '1.2rem', fontWeight: '800', background: 'rgba(245, 158, 11, 0.15)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.35)', whiteSpace: 'nowrap' },
   scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)', fontVariantNumeric: 'tabular-nums' },
