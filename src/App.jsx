@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.0";
+const APP_VERSION = "v8.1";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,18 +132,14 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.0 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.1 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  // Quest & Achievement Header State
-  // Steps: 0 = take ingredient, 1 = cut ingredient, 2 = cook in pot, 3 = serve at counter
   const [recipeIndex, setRecipeIndex] = useState(0);
   const [questStep, setQuestStep] = useState(0);
-  const [bannerStatus, setBannerStatus] = useState('neutral'); // 'neutral' | 'success' | 'error'
+  const [bannerStatus, setBannerStatus] = useState('neutral');
   const [bannerFading, setBannerFading] = useState(false);
 
-  // Minigame Overlays State
-  // activeMinigame: null | { type: 'cut' | 'cook', itemType: string }
   const [activeMinigame, setActiveMinigame] = useState(null);
   const [sliderPos, setSliderPos] = useState(0);
   const sliderDirRef = useRef(1);
@@ -159,7 +155,7 @@ export default function App() {
   const [facingRight, setFacingRight] = useState(true);
   const [frameTick, setFrameTick] = useState(0);
   const [holdingItem, setHoldingItem] = useState(null);
-  const [holdingState, setHoldingState] = useState('raw'); // 'raw' | 'chopped' | 'cooked'
+  const [holdingState, setHoldingState] = useState('raw');
 
   const posRef = useRef({ x: 140, y: initialFloorY });
   const velRef = useRef({ x: 0, y: 0 });
@@ -200,7 +196,6 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
-  // Trigger 3-2-1 Countdown when game transitions to playing
   useEffect(() => {
     if (gameState === 'playing' && !isHost) {
       setCountdown(3);
@@ -217,7 +212,6 @@ export default function App() {
     }
   }, [gameState, isHost]);
 
-  // Minigame Slider Animation Loop
   useEffect(() => {
     if (!activeMinigame) return;
     sliderPosRef.current = 0;
@@ -249,7 +243,6 @@ export default function App() {
         setTimeout(() => {
           setQuestStep(prev => {
             if (prev >= 3) {
-              // Advance to next recipe and replenish items
               const nextRecipeIdx = recipeIndex + 1;
               setRecipeIndex(nextRecipeIdx);
               setWorldItems(INITIAL_ITEMS);
@@ -274,7 +267,6 @@ export default function App() {
   const resolveMinigame = () => {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
-    // Sweet spot is between 38 and 62
     const isGood = posVal >= 38 && posVal <= 62;
 
     if (activeMinigame.type === 'cut') {
@@ -289,7 +281,6 @@ export default function App() {
         setActiveMinigame(null);
         triggerQuestFeedback('success', questStep === 1);
       } else {
-        // Bad cut: lose points and retry
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
         setTimeout(() => setBannerStatus('neutral'), 700);
@@ -306,7 +297,6 @@ export default function App() {
         setActiveMinigame(null);
         triggerQuestFeedback('success', questStep === 2);
       } else {
-        // Bad temp: lose points and retry
         setScore(prev => Math.max(0, prev - 20));
         setBannerStatus('error');
         setTimeout(() => setBannerStatus('neutral'), 700);
@@ -338,7 +328,6 @@ export default function App() {
   const handleSpaceAction = () => {
     if (isHost || countdown !== null) return;
 
-    // If a minigame overlay is open, SPACE locks in the timing!
     if (activeMinigame) {
       resolveMinigame();
       return;
@@ -357,7 +346,6 @@ export default function App() {
     const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
-    // 1. Serving Counter
     if (Math.abs(px - STATIONS.counter.x) < 55 && Math.abs(py - counterWorldY) < 55) {
       if (holdingItem && holdingState === 'cooked' && questStep === 3) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
@@ -374,7 +362,6 @@ export default function App() {
       return;
     }
 
-    // 2. Cutting Board Stand -> Triggers Cutting Minigame Overlay
     if (Math.abs(px - STATIONS.cuttingBoard.x) < 55 && Math.abs(py - cbWorldY) < 55) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'raw' && questStep === 1) {
         const itemType = holdingItem;
@@ -390,7 +377,6 @@ export default function App() {
       return;
     }
 
-    // 3. Cooking Pot -> Triggers Temperature Minigame Overlay
     if (Math.abs(px - STATIONS.pot.x) < 55 && Math.abs(py - potWorldY) < 55) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'chopped' && questStep === 2) {
         const itemType = holdingItem;
@@ -406,7 +392,6 @@ export default function App() {
       return;
     }
 
-    // 4. Pickup from World Items
     if (!holdingItem) {
       let pickedItem = null;
       const updatedItems = itemsRef.current.map(item => {
@@ -417,7 +402,6 @@ export default function App() {
             pickedItem = item;
             return null;
           } else {
-            // Wrong ingredient! Turn banner red and lose points
             triggerQuestFeedback('error', false);
           }
         }
@@ -435,6 +419,15 @@ export default function App() {
     }
   };
 
+  const handleJumpAction = () => {
+    if (gameState !== 'playing' || isHost || countdown !== null || activeMinigame !== null) return;
+    if (jumpsRef.current > 0) {
+      velRef.current.y = -13;
+      jumpsRef.current -= 1;
+      setJumpsLeft(jumpsRef.current);
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing' || isHost) return;
@@ -445,9 +438,7 @@ export default function App() {
         handleSpaceAction();
       } else if (!activeMinigame && countdown === null && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
-        velRef.current.y = -13;
-        jumpsRef.current -= 1;
-        setJumpsLeft(jumpsRef.current);
+        handleJumpAction();
       }
     };
 
@@ -471,7 +462,6 @@ export default function App() {
     const moveSpeed = 1.45;
 
     const interval = setInterval(() => {
-      // Freeze player movement during 3-2-1 countdown or active minigame overlay
       if (countdown !== null || activeMinigame !== null) return;
 
       const floorY = viewportRef.current.h - GROUND_HEIGHT;
@@ -483,8 +473,8 @@ export default function App() {
       let currentAnim = 'idle';
       let isRight = facingRef.current;
 
-      const movingLeft = keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A'];
-      const movingRight = keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D'];
+      const movingLeft = keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A'] || keysPressed.current['touchLeft'];
+      const movingRight = keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D'] || keysPressed.current['touchRight'];
 
       if (movingLeft) {
         vx -= moveSpeed;
@@ -637,7 +627,6 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  // Determine current French instruction text & golden arrow world coordinates
   const getQuestInfo = () => {
     if (questStep === 0) {
       const targetItem = worldItems.find(i => i.type === currentRecipe.ingredient) || INITIAL_ITEMS.find(i => i.type === currentRecipe.ingredient);
@@ -694,7 +683,7 @@ export default function App() {
     <div style={styles.appContainer}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; user-select: none; }
         @keyframes fallAndSpin {
           0% { transform: translateY(-10vh) rotate(0deg); opacity: 0.8; }
           100% { transform: translateY(110vh) rotate(720deg); opacity: 0.1; }
@@ -862,6 +851,48 @@ export default function App() {
             </div>
           </div>
 
+          {/* On-Screen Mobile Touch Controls */}
+          <div style={styles.touchControlsContainer}>
+            <div style={styles.touchDpad}>
+              <button
+                style={styles.touchBtn}
+                onTouchStart={() => { keysPressed.current['touchLeft'] = true; }}
+                onTouchEnd={() => { keysPressed.current['touchLeft'] = false; }}
+                onMouseDown={() => { keysPressed.current['touchLeft'] = true; }}
+                onMouseUp={() => { keysPressed.current['touchLeft'] = false; }}
+                onMouseLeave={() => { keysPressed.current['touchLeft'] = false; }}
+              >
+                ◀️
+              </button>
+              <button
+                style={styles.touchBtn}
+                onTouchStart={() => { keysPressed.current['touchRight'] = true; }}
+                onTouchEnd={() => { keysPressed.current['touchRight'] = false; }}
+                onMouseDown={() => { keysPressed.current['touchRight'] = true; }}
+                onMouseUp={() => { keysPressed.current['touchRight'] = false; }}
+                onMouseLeave={() => { keysPressed.current['touchRight'] = false; }}
+              >
+                ▶️
+              </button>
+            </div>
+            <div style={styles.touchActionPad}>
+              <button
+                style={{ ...styles.touchBtn, background: 'rgba(59, 130, 246, 0.85)' }}
+                onTouchStart={handleJumpAction}
+                onClick={handleJumpAction}
+              >
+                🦘
+              </button>
+              <button
+                style={{ ...styles.touchBtn, background: 'rgba(16, 185, 129, 0.95)', width: '90px', fontSize: '1.1rem' }}
+                onTouchStart={handleSpaceAction}
+                onClick={handleSpaceAction}
+              >
+                ESPACE 🖐️
+              </button>
+            </div>
+          </div>
+
           {/* 3 - 2 - 1 Countdown Overlay */}
           {countdown !== null && (
             <div style={styles.countdownOverlay}>
@@ -879,17 +910,18 @@ export default function App() {
                   {activeMinigame.type === 'cut' ? '🔪 ANGLE DE COUPE PARFAIT !' : '🔥 CONTRÔLE DE TEMPÉRATURE !'}
                 </div>
                 <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>
-                  Appuie sur <strong>ESPACE</strong> dans la zone verte !
+                  Appuie sur <strong>ESPACE</strong> ou le bouton vert dans la zone verte !
                 </p>
 
                 <div style={styles.sliderTrack}>
-                  {/* Green Sweet Spot Zone (38% to 62%) */}
                   <div style={styles.sweetSpot} />
-                  {/* Moving Cursor */}
                   <div style={{ ...styles.sliderCursor, left: `${sliderPos}%` }}>
                     {activeMinigame.type === 'cut' ? '🔪' : '🔥'}
                   </div>
                 </div>
+                <button onClick={resolveMinigame} style={styles.minigameActionBtn}>
+                  Valider ! 🎯
+                </button>
               </div>
             </div>
           )}
@@ -939,7 +971,7 @@ export default function App() {
               ⬇️
             </div>
 
-            {/* Cutting Board Station on Platform (No Text) */}
+            {/* Cutting Board Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div style={styles.cuttingBoardTop}>
@@ -958,7 +990,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Single Cooking Pot Station on Platform (No Text) */}
+            {/* Single Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               <div style={styles.stationStand}>
                 <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>
@@ -977,7 +1009,7 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients resting directly on platforms */}
+            {/* World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
               return (
@@ -1062,13 +1094,18 @@ const styles = {
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
   questHeader: { position: 'fixed', top: '68px', left: '50%', zIndex: 55, padding: '12px 28px', borderRadius: '16px', border: '3px solid #fbbf24', boxShadow: '0 10px 30px rgba(0,0,0,0.45)', textAlign: 'center', transition: 'all 0.3s ease', minWidth: '340px' },
+  touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
+  touchDpad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
+  touchActionPad: { display: 'flex', gap: '12px', pointerEvents: 'auto' },
+  touchBtn: { width: '64px', height: '64px', borderRadius: '18px', background: 'rgba(15, 23, 42, 0.85)', border: '2px solid rgba(255,255,255,0.25)', color: '#fff', fontSize: '1.5rem', fontWeight: '900', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: '0 8px 20px rgba(0,0,0,0.4)', outline: 'none', WebkitTapHighlightColor: 'transparent' },
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
   countdownText: { fontSize: '7rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 8px 30px rgba(0,0,0,0.6)' },
   minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90 },
   minigameBox: { background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '24px', padding: '32px 40px', width: '90%', maxWidth: '460px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' },
-  sliderTrack: { width: '100%', height: '32px', background: '#0f172a', borderRadius: '16px', border: '2px solid rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden' },
+  sliderTrack: { width: '100%', height: '32px', background: '#0f172a', borderRadius: '16px', border: '2px solid rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden', marginBottom: '20px' },
   sweetSpot: { position: 'absolute', left: '38%', width: '24%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
   sliderCursor: { position: 'absolute', top: '-2px', transform: 'translateX(-50%)', fontSize: '1.6rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' },
+  minigameActionBtn: { background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '12px 24px', fontSize: '1.1rem', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,0,0,0.3)' },
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
