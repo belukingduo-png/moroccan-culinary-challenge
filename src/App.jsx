@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v7.3";
+const APP_VERSION = "v8.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -48,6 +48,27 @@ const STATIONS = {
   pot: { x: 1050, offsetFromGround: 260 },
   counter: { x: 1950, offsetFromGround: 180 }
 };
+
+const RECIPES = [
+  {
+    name: "Tajine à la Tomate",
+    ingredient: '🍅',
+    ingredientLabel: "la tomate 🍅",
+    itemId: 'item_1'
+  },
+  {
+    name: "Couscous à l'Ail",
+    ingredient: '🧄',
+    ingredientLabel: "l'ail 🧄",
+    itemId: 'item_2'
+  },
+  {
+    name: "Pain Grillé Royal",
+    ingredient: '🥖',
+    ingredientLabel: "la baguette 🥖",
+    itemId: 'item_3'
+  }
+];
 
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 15, w: 34, h: 45 }],
@@ -109,8 +130,24 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v7.3 Prêt']);
+  const [countdown, setCountdown] = useState(null);
+  const [score, setScore] = useState(0);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.0 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
+
+  // Quest & Achievement Header State
+  // Steps: 0 = take ingredient, 1 = cut ingredient, 2 = cook in pot, 3 = serve at counter
+  const [recipeIndex, setRecipeIndex] = useState(0);
+  const [questStep, setQuestStep] = useState(0);
+  const [bannerStatus, setBannerStatus] = useState('neutral'); // 'neutral' | 'success' | 'error'
+  const [bannerFading, setBannerFading] = useState(false);
+
+  // Minigame Overlays State
+  // activeMinigame: null | { type: 'cut' | 'cook', itemType: string }
+  const [activeMinigame, setActiveMinigame] = useState(null);
+  const [sliderPos, setSliderPos] = useState(0);
+  const sliderDirRef = useRef(1);
+  const sliderPosRef = useRef(0);
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
   const initialFloorY = window.innerHeight - GROUND_HEIGHT;
@@ -122,6 +159,7 @@ export default function App() {
   const [facingRight, setFacingRight] = useState(true);
   const [frameTick, setFrameTick] = useState(0);
   const [holdingItem, setHoldingItem] = useState(null);
+  const [holdingState, setHoldingState] = useState('raw'); // 'raw' | 'chopped' | 'cooked'
 
   const posRef = useRef({ x: 140, y: initialFloorY });
   const velRef = useRef({ x: 0, y: 0 });
@@ -132,6 +170,8 @@ export default function App() {
   const viewportRef = useRef(viewport);
   const itemsRef = useRef(INITIAL_ITEMS);
   const stationRef = useRef(stationState);
+
+  const currentRecipe = RECIPES[recipeIndex % RECIPES.length];
 
   const backgroundParticles = useMemo(() => {
     return [...Array(15)].map((_, i) => ({
@@ -160,6 +200,120 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
+  // Trigger 3-2-1 Countdown when game transitions to playing
+  useEffect(() => {
+    if (gameState === 'playing' && !isHost) {
+      setCountdown(3);
+      const t1 = setTimeout(() => setCountdown(2), 1000);
+      const t2 = setTimeout(() => setCountdown(1), 2000);
+      const t3 = setTimeout(() => setCountdown('GO!'), 3000);
+      const t4 = setTimeout(() => setCountdown(null), 3700);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+      };
+    }
+  }, [gameState, isHost]);
+
+  // Minigame Slider Animation Loop
+  useEffect(() => {
+    if (!activeMinigame) return;
+    sliderPosRef.current = 0;
+    sliderDirRef.current = 1;
+    setSliderPos(0);
+
+    const speed = activeMinigame.type === 'cut' ? 2.6 : 2.2;
+    const interval = setInterval(() => {
+      let next = sliderPosRef.current + speed * sliderDirRef.current;
+      if (next >= 100) {
+        next = 100;
+        sliderDirRef.current = -1;
+      } else if (next <= 0) {
+        next = 0;
+        sliderDirRef.current = 1;
+      }
+      sliderPosRef.current = next;
+      setSliderPos(next);
+    }, 16);
+
+    return () => clearInterval(interval);
+  }, [activeMinigame]);
+
+  const triggerQuestFeedback = (status, advanceStep = false) => {
+    setBannerStatus(status);
+    if (status === 'success' && advanceStep) {
+      setTimeout(() => {
+        setBannerFading(true);
+        setTimeout(() => {
+          setQuestStep(prev => {
+            if (prev >= 3) {
+              // Advance to next recipe and replenish items
+              const nextRecipeIdx = recipeIndex + 1;
+              setRecipeIndex(nextRecipeIdx);
+              setWorldItems(INITIAL_ITEMS);
+              itemsRef.current = INITIAL_ITEMS;
+              if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), INITIAL_ITEMS);
+              return 0;
+            }
+            return prev + 1;
+          });
+          setBannerStatus('neutral');
+          setBannerFading(false);
+        }, 350);
+      }, 650);
+    } else if (status === 'error') {
+      setScore(prev => Math.max(0, prev - 20));
+      setTimeout(() => {
+        setBannerStatus('neutral');
+      }, 900);
+    }
+  };
+
+  const resolveMinigame = () => {
+    if (!activeMinigame) return;
+    const posVal = sliderPosRef.current;
+    // Sweet spot is between 38 and 62
+    const isGood = posVal >= 38 && posVal <= 62;
+
+    if (activeMinigame.type === 'cut') {
+      if (isGood) {
+        setScore(prev => prev + 50);
+        setHoldingItem(activeMinigame.itemType);
+        setHoldingState('chopped');
+        const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        setActiveMinigame(null);
+        triggerQuestFeedback('success', questStep === 1);
+      } else {
+        // Bad cut: lose points and retry
+        setScore(prev => Math.max(0, prev - 20));
+        setBannerStatus('error');
+        setTimeout(() => setBannerStatus('neutral'), 700);
+      }
+    } else if (activeMinigame.type === 'cook') {
+      if (isGood) {
+        setScore(prev => prev + 50);
+        setHoldingItem('🍲');
+        setHoldingState('cooked');
+        const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
+        stationRef.current = updatedStations;
+        setStationState(updatedStations);
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+        setActiveMinigame(null);
+        triggerQuestFeedback('success', questStep === 2);
+      } else {
+        // Bad temp: lose points and retry
+        setScore(prev => Math.max(0, prev - 20));
+        setBannerStatus('error');
+        setTimeout(() => setBannerStatus('neutral'), 700);
+      }
+    }
+  };
+
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
     setCopied(true);
@@ -182,7 +336,14 @@ export default function App() {
   };
 
   const handleSpaceAction = () => {
-    if (isHost) return;
+    if (isHost || countdown !== null) return;
+
+    // If a minigame overlay is open, SPACE locks in the timing!
+    if (activeMinigame) {
+      resolveMinigame();
+      return;
+    }
+
     const floorY = viewportRef.current.h - GROUND_HEIGHT;
     const px = posRef.current.x;
     const py = posRef.current.y;
@@ -198,103 +359,78 @@ export default function App() {
 
     // 1. Serving Counter
     if (Math.abs(px - STATIONS.counter.x) < 55 && Math.abs(py - counterWorldY) < 55) {
-      if (holdingItem) {
+      if (holdingItem && holdingState === 'cooked' && questStep === 3) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         setHoldingItem(null);
+        setHoldingState('raw');
+        setScore(prev => prev + 100);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        return;
+        triggerQuestFeedback('success', true);
+      } else {
+        triggerQuestFeedback('error', false);
       }
+      return;
     }
 
-    // 2. Cutting Board Stand (3 seconds chop timer - pure emoji only, no text)
+    // 2. Cutting Board Stand -> Triggers Cutting Minigame Overlay
     if (Math.abs(px - STATIONS.cuttingBoard.x) < 55 && Math.abs(py - cbWorldY) < 55) {
-      if (holdingItem && !stationRef.current.cuttingBoardItem && !stationRef.current.cuttingBoardActive) {
+      if (holdingItem === currentRecipe.ingredient && holdingState === 'raw' && questStep === 1) {
         const itemType = holdingItem;
         setHoldingItem(null);
-        const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType, state: 'raw' }, cuttingBoardActive: true };
+        const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-
-        setTimeout(() => {
-          const finished = { type: itemType, state: 'chopped' };
-          stationRef.current = { ...stationRef.current, cuttingBoardItem: finished, cuttingBoardActive: false };
-          setStationState(stationRef.current);
-          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
-        }, 3000);
-        return;
-      } else if (!holdingItem && stationRef.current.cuttingBoardItem && !stationRef.current.cuttingBoardActive) {
-        setHoldingItem(stationRef.current.cuttingBoardItem.type);
-        const updatedStations = { ...stationRef.current, cuttingBoardItem: null };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        return;
+        setActiveMinigame({ type: 'cut', itemType });
+      } else {
+        triggerQuestFeedback('error', false);
       }
+      return;
     }
 
-    // 3. Pot (3 seconds cook timer - pure emoji only, no text)
+    // 3. Cooking Pot -> Triggers Temperature Minigame Overlay
     if (Math.abs(px - STATIONS.pot.x) < 55 && Math.abs(py - potWorldY) < 55) {
-      if (holdingItem && !stationRef.current.potItem && !stationRef.current.potCooking) {
+      if (holdingItem === currentRecipe.ingredient && holdingState === 'chopped' && questStep === 2) {
+        const itemType = holdingItem;
         setHoldingItem(null);
         const updatedStations = { ...stationRef.current, potCooking: true };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-
-        setTimeout(() => {
-          const finished = { type: '🍲', state: 'cooked' };
-          stationRef.current = { ...stationRef.current, potItem: finished, potCooking: false };
-          setStationState(stationRef.current);
-          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), stationRef.current);
-        }, 3000);
-        return;
-      } else if (!holdingItem && stationRef.current.potItem && stationRef.current.potItem.state === 'cooked') {
-        setHoldingItem(stationRef.current.potItem.type);
-        const updatedStations = { ...stationRef.current, potItem: null };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        return;
+        setActiveMinigame({ type: 'cook', itemType });
+      } else {
+        triggerQuestFeedback('error', false);
       }
+      return;
     }
 
-    // 4. Pickup from World Items or Return to Origin Spot
+    // 4. Pickup from World Items
     if (!holdingItem) {
+      let pickedItem = null;
       const updatedItems = itemsRef.current.map(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
         const dist = Math.hypot(px - item.x, py - itemWorldY);
-        if (dist < 45) {
-          setHoldingItem(item.type);
-          return null;
+        if (dist < 48 && !pickedItem) {
+          if (questStep === 0 && item.type === currentRecipe.ingredient) {
+            pickedItem = item;
+            return null;
+          } else {
+            // Wrong ingredient! Turn banner red and lose points
+            triggerQuestFeedback('error', false);
+          }
         }
         return item;
       }).filter(Boolean);
 
-      itemsRef.current = updatedItems;
-      setWorldItems(updatedItems);
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), updatedItems);
-    } else {
-      const targetOrigin = itemsRef.current.find(item => {
-        const origWorldY = item.origin.y === 0 ? floorY : floorY - item.origin.y;
-        return Math.hypot(px - item.origin.x, py - origWorldY) < 50;
-      });
-
-      if (targetOrigin || Math.abs(px - 140) < 60) {
-        const returnedItem = {
-          id: 'item_' + Date.now(),
-          x: px,
-          y: py === floorY ? 0 : floorY - py,
-          origin: { x: px, y: py === floorY ? 0 : floorY - py },
-          type: holdingItem
-        };
-        const updatedItems = [...itemsRef.current, returnedItem];
+      if (pickedItem) {
+        setHoldingItem(pickedItem.type);
+        setHoldingState('raw');
         itemsRef.current = updatedItems;
         setWorldItems(updatedItems);
-        setHoldingItem(null);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), updatedItems);
+        triggerQuestFeedback('success', true);
       }
     }
   };
@@ -307,7 +443,7 @@ export default function App() {
       if (e.key === ' ') {
         e.preventDefault();
         handleSpaceAction();
-      } else if ((e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
+      } else if (!activeMinigame && countdown === null && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
         velRef.current.y = -13;
         jumpsRef.current -= 1;
@@ -325,7 +461,7 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, holdingItem, isHost]);
+  }, [gameState, holdingItem, holdingState, isHost, activeMinigame, countdown, questStep, recipeIndex]);
 
   useEffect(() => {
     if (gameState !== 'playing' || isHost) return;
@@ -335,6 +471,9 @@ export default function App() {
     const moveSpeed = 1.45;
 
     const interval = setInterval(() => {
+      // Freeze player movement during 3-2-1 countdown or active minigame overlay
+      if (countdown !== null || activeMinigame !== null) return;
+
       const floorY = viewportRef.current.h - GROUND_HEIGHT;
       let vx = velRef.current.x;
       let vy = velRef.current.y;
@@ -414,7 +553,7 @@ export default function App() {
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, holdingItem, isHost]);
+  }, [gameState, holdingItem, isHost, countdown, activeMinigame]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -498,6 +637,59 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
+  // Determine current French instruction text & golden arrow world coordinates
+  const getQuestInfo = () => {
+    if (questStep === 0) {
+      const targetItem = worldItems.find(i => i.type === currentRecipe.ingredient) || INITIAL_ITEMS.find(i => i.type === currentRecipe.ingredient);
+      const targetY = targetItem ? (targetItem.y === 0 ? floorY - 65 : floorY - targetItem.y - 68) : floorY - 180;
+      return {
+        text: `1. Prends ${currentRecipe.ingredientLabel} (ESPACE)`,
+        arrowX: targetItem ? targetItem.x : 220,
+        arrowY: targetY
+      };
+    }
+    if (questStep === 1) {
+      return {
+        text: `2. Coupe ${currentRecipe.ingredientLabel} sur la planche 🔪 (ESPACE)`,
+        arrowX: STATIONS.cuttingBoard.x,
+        arrowY: cbTop - 42
+      };
+    }
+    if (questStep === 2) {
+      return {
+        text: `3. Fais cuire dans la marmite 🍲 (ESPACE)`,
+        arrowX: STATIONS.pot.x,
+        arrowY: potTop - 52
+      };
+    }
+    return {
+      text: `4. Sers le plat (${currentRecipe.name}) au comptoir 🛎️ (ESPACE)`,
+      arrowX: STATIONS.counter.x,
+      arrowY: counterTop - 42
+    };
+  };
+
+  const questInfo = getQuestInfo();
+
+  const getQuestBannerStyle = () => {
+    let bg = 'rgba(15, 23, 42, 0.92)';
+    let border = '#fbbf24';
+    if (bannerStatus === 'success') {
+      bg = 'rgba(16, 185, 129, 0.95)';
+      border = '#34d399';
+    } else if (bannerStatus === 'error') {
+      bg = 'rgba(239, 68, 68, 0.95)';
+      border = '#f87171';
+    }
+    return {
+      ...styles.questHeader,
+      background: bg,
+      borderColor: border,
+      opacity: bannerFading ? 0 : 1,
+      transform: bannerFading ? 'translate(-50%, -14px)' : 'translate(-50%, 0px)'
+    };
+  };
+
   return (
     <div style={styles.appContainer}>
       <style>{`
@@ -523,6 +715,15 @@ export default function App() {
         .holding-arrow {
           animation: floatArrow 1s ease-in-out infinite;
         }
+        @keyframes goldenBounce {
+          0% { transform: translate(-50%, 0px) scale(1); }
+          50% { transform: translate(-50%, -12px) scale(1.15); }
+          100% { transform: translate(-50%, 0px) scale(1); }
+        }
+        .golden-arrow {
+          animation: goldenBounce 0.8s ease-in-out infinite;
+          filter: drop-shadow(0 0 12px #fbbf24) drop-shadow(0 0 24px #f59e0b);
+        }
         @keyframes chopKnife {
           0% { transform: translateY(0px) rotate(-20deg); }
           50% { transform: translateY(-12px) rotate(15deg); }
@@ -546,6 +747,14 @@ export default function App() {
         }
         .fire-stand {
           animation: fireFlicker 0.4s ease-in-out infinite;
+        }
+        @keyframes popCountdown {
+          0% { transform: scale(0.4); opacity: 0; }
+          50% { transform: scale(1.25); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .countdown-num {
+          animation: popCountdown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
       `}</style>
 
@@ -635,12 +844,55 @@ export default function App() {
 
       {!isHost && gameState === 'playing' && (
         <div style={styles.gameContainer}>
+          {/* Top HUD Stats */}
           <div style={styles.hudBar}>
-            <span>📍 Position: {Math.round(pos.x)}m</span>
+            <span>⭐ Score: {score}</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
             <span>🎒 En main: {holdingItem || 'Aucun'}</span>
-            <span>🍲 Plats servis: {stationState.servedDishes}</span>
+            <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
+
+          {/* Dynamic French Instruction / Achievement Banner */}
+          <div style={getQuestBannerStyle()}>
+            <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '1px', color: '#fbbf24', marginBottom: '2px' }}>
+              Recette : {currentRecipe.name}
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: '900' }}>
+              {bannerStatus === 'success' ? '✅ Bien joué !' : bannerStatus === 'error' ? '❌ Mauvaise action ! (-20 pts)' : questInfo.text}
+            </div>
+          </div>
+
+          {/* 3 - 2 - 1 Countdown Overlay */}
+          {countdown !== null && (
+            <div style={styles.countdownOverlay}>
+              <div key={countdown} className="countdown-num" style={styles.countdownText}>
+                {countdown}
+              </div>
+            </div>
+          )}
+
+          {/* Cutting & Cooking Minigame Timing Overlay */}
+          {activeMinigame && (
+            <div style={styles.minigameOverlay}>
+              <div style={styles.minigameBox}>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
+                  {activeMinigame.type === 'cut' ? '🔪 ANGLE DE COUPE PARFAIT !' : '🔥 CONTRÔLE DE TEMPÉRATURE !'}
+                </div>
+                <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>
+                  Appuie sur <strong>ESPACE</strong> dans la zone verte !
+                </p>
+
+                <div style={styles.sliderTrack}>
+                  {/* Green Sweet Spot Zone (38% to 62%) */}
+                  <div style={styles.sweetSpot} />
+                  {/* Moving Cursor */}
+                  <div style={{ ...styles.sliderCursor, left: `${sliderPos}%` }}>
+                    {activeMinigame.type === 'cut' ? '🔪' : '🔥'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div
             style={{
@@ -655,22 +907,6 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
-
-            {/* BANNERS */}
-            <div style={{ ...styles.bannerBox, left: '320px', top: '150px', borderColor: '#f59e0b' }}>
-              <div style={styles.bannerTitle}>🥘 RECIPE PREVIEW</div>
-              <div style={styles.bannerContent}>Tajine Royal aux Légumes & Épices</div>
-            </div>
-
-            <div style={{ ...styles.bannerBox, left: '900px', top: '120px', borderColor: '#3b82f6' }}>
-              <div style={styles.bannerTitle}>🎮 HOW TO PLAY</div>
-              <div style={styles.bannerContent}>1. Pick up ingredients<br/>2. Chop & Cook in Pot<br/>3. Serve at Counter!</div>
-            </div>
-
-            <div style={{ ...styles.bannerBox, left: '1500px', top: '140px', borderColor: '#10b981' }}>
-              <div style={styles.bannerTitle}>💡 FUN FACT</div>
-              <div style={styles.bannerContent}>Tajine pots are named after the conical clay dish used to trap steam!</div>
-            </div>
 
             {PLATFORM_LAYOUT.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
@@ -687,6 +923,21 @@ export default function App() {
                 />
               );
             })}
+
+            {/* Glowing Golden Arrow pointing to current task target */}
+            <div
+              className="golden-arrow"
+              style={{
+                position: 'absolute',
+                left: `${questInfo.arrowX}px`,
+                top: `${questInfo.arrowY}px`,
+                fontSize: '2.2rem',
+                zIndex: 35,
+                pointerEvents: 'none'
+              }}
+            >
+              ⬇️
+            </div>
 
             {/* Cutting Board Station on Platform (No Text) */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
@@ -809,12 +1060,17 @@ const styles = {
   playerItem: { background: '#0f172a', padding: '12px', borderRadius: '10px', marginBottom: '8px', fontWeight: '700' },
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
-  hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  questHeader: { position: 'fixed', top: '68px', left: '50%', zIndex: 55, padding: '12px 28px', borderRadius: '16px', border: '3px solid #fbbf24', boxShadow: '0 10px 30px rgba(0,0,0,0.45)', textAlign: 'center', transition: 'all 0.3s ease', minWidth: '340px' },
+  countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
+  countdownText: { fontSize: '7rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 8px 30px rgba(0,0,0,0.6)' },
+  minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 90 },
+  minigameBox: { background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '24px', padding: '32px 40px', width: '90%', maxWidth: '460px', textAlign: 'center', boxShadow: '0 20px 50px rgba(0,0,0,0.7)' },
+  sliderTrack: { width: '100%', height: '32px', background: '#0f172a', borderRadius: '16px', border: '2px solid rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden' },
+  sweetSpot: { position: 'absolute', left: '38%', width: '24%', height: '100%', background: 'linear-gradient(90deg, #10b981, #34d399)', boxShadow: '0 0 15px #10b981' },
+  sliderCursor: { position: 'absolute', top: '-2px', transform: 'translateX(-50%)', fontSize: '1.6rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.6))' },
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
-  bannerBox: { position: 'absolute', width: '260px', background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', border: '3px solid', borderRadius: '16px', padding: '14px', zIndex: '5', boxShadow: '0 10px 25px rgba(0,0,0,0.4)', textAlign: 'center' },
-  bannerTitle: { fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '6px', letterSpacing: '0.5px' },
-  bannerContent: { fontSize: '0.85rem', color: '#e2e8f0', lineHeight: '1.4', fontWeight: '600' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
   ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '28px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 12px, #78350f 12px, #78350f 24px)', borderTop: '4px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
