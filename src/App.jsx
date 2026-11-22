@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.1-zellige";
+const APP_VERSION = "v11.2-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -170,7 +170,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.1 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.2 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Portal Transition State
@@ -502,8 +502,8 @@ export default function App() {
       });
 
       if (pickedItem) {
-        const cleanedPicked = pickedItem.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
-        const cleanedTarget = step.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim();
+        const cleanedPicked = (pickedItem?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+        const cleanedTarget = (step?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
 
         if (step && step.id === 'pickup' && cleanedPicked === cleanedTarget) {
           updateHolding(pickedItem.type, 'raw');
@@ -514,7 +514,7 @@ export default function App() {
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         } else {
           setScore(prev => Math.max(0, prev - 20));
-          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem.type}) ! -20 pts (Il faut : ${step.targetItem})`, 'error', 3500);
+          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem?.type || ''}) ! -20 pts (Il faut : ${step?.targetItem || ''})`, 'error', 3500);
         }
       }
     }
@@ -734,8 +734,8 @@ export default function App() {
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
     const foundItem = worldItems.find(i => {
-      const cleanedI = i.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
-      const cleanedT = currentStepObj.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim();
+      const cleanedI = (i?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+      const cleanedT = (currentStepObj?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
       return cleanedI === cleanedT;
     });
     targetWorldX = foundItem ? foundItem.x : 220;
@@ -853,7 +853,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.1)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.2)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1200,8 +1200,8 @@ export default function App() {
             {/* World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
-              const cleanedItem = item.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
-              const cleanedTarget = currentStepObj.targetItem ? currentStepObj.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim() : '';
+              const cleanedItem = (item?.type || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
+              const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[\ufe00-\ufe0f]/g, '').trim();
               const isTargetItem = currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget;
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
