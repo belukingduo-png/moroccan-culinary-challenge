@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v11.5-zellige";
+const APP_VERSION = "v12.0-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -27,8 +27,8 @@ const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 28;
 const HITBOX_HALF_W = 16;
 
-// World 1 Platform Layout (Daytime Kitchen)
-const WORLD_1_PLATFORMS = [
+// Platform Layouts across 5 Worlds
+const PLATFORMS_W1 = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
   { x: 720, offsetFromGround: 140, w: 180, h: 24 },
@@ -38,8 +38,7 @@ const WORLD_1_PLATFORMS = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
-// World 2 Platform Layout (Night Sky Twilight World)
-const WORLD_2_PLATFORMS = [
+const PLATFORMS_W2 = [
   { x: 220, offsetFromGround: 170, w: 200, h: 24 },
   { x: 520, offsetFromGround: 250, w: 180, h: 24 },
   { x: 800, offsetFromGround: 150, w: 220, h: 24 },
@@ -48,58 +47,116 @@ const WORLD_2_PLATFORMS = [
   { x: 1700, offsetFromGround: 240, w: 220, h: 24 }
 ];
 
+const PLATFORMS_W3 = [
+  { x: 200, offsetFromGround: 150, w: 190, h: 24 },
+  { x: 480, offsetFromGround: 240, w: 210, h: 24 },
+  { x: 760, offsetFromGround: 160, w: 200, h: 24 },
+  { x: 1040, offsetFromGround: 270, w: 180, h: 24 },
+  { x: 1320, offsetFromGround: 180, w: 220, h: 24 },
+  { x: 1620, offsetFromGround: 250, w: 200, h: 24 }
+];
+
+const PLATFORMS_W4 = [
+  { x: 250, offsetFromGround: 190, w: 180, h: 24 },
+  { x: 550, offsetFromGround: 260, w: 200, h: 24 },
+  { x: 850, offsetFromGround: 160, w: 210, h: 24 },
+  { x: 1150, offsetFromGround: 240, w: 190, h: 24 },
+  { x: 1450, offsetFromGround: 180, w: 220, h: 24 },
+  { x: 1750, offsetFromGround: 270, w: 200, h: 24 }
+];
+
+const PLATFORMS_W5 = [
+  { x: 200, offsetFromGround: 160, w: 200, h: 24 },
+  { x: 500, offsetFromGround: 240, w: 190, h: 24 },
+  { x: 780, offsetFromGround: 180, w: 220, h: 24 },
+  { x: 1080, offsetFromGround: 270, w: 200, h: 24 },
+  { x: 1380, offsetFromGround: 190, w: 210, h: 24 },
+  { x: 1680, offsetFromGround: 250, w: 190, h: 24 }
+];
+
 const WORLDS_CONFIG = [
   {
     id: 0,
     name: "Monde 1 : Cuisine ensoleillée ☀️",
-    bgStyle: {
-      background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)'
-    },
-    platforms: WORLD_1_PLATFORMS,
-    items: [
-      { id: 'item_1', x: 220, y: 130, type: '🍅' },
-      { id: 'item_2', x: 780, y: 140, type: '🧄' },
-      { id: 'item_3', x: 1350, y: 170, type: '🥖' }
-    ],
-    stations: {
-      cuttingBoard: { x: 500, offsetFromGround: 230 },
-      pot: { x: 1050, offsetFromGround: 260 },
-      counter: { x: 1950, offsetFromGround: 180 }
-    },
+    bgStyle: { background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
+    platforms: PLATFORMS_W1,
+    items: [{ id: 'item_1', x: 220, y: 130, type: '🍅' }],
+    stations: { cuttingBoard: { x: 440, offsetFromGround: 230 }, pot: { x: 980, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
       steps: [
         { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1050 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1950 }
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 440 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 980 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1880 }
       ]
     }
   },
   {
     id: 1,
     name: "Monde 2 : Royaume Céleste 🌌",
-    bgStyle: {
-      background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)'
-    },
-    platforms: WORLD_2_PLATFORMS,
-    items: [
-      { id: 'item_w2_1', x: 260, y: 170, type: '🍄' },
-      { id: 'item_w2_2', x: 840, y: 150, type: '🧄' },
-      { id: 'item_w2_3', x: 1450, y: 190, type: '🍋' }
-    ],
-    stations: {
-      cuttingBoard: { x: 520, offsetFromGround: 250 },
-      pot: { x: 1100, offsetFromGround: 280 },
-      counter: { x: 1700, offsetFromGround: 240 }
-    },
+    bgStyle: { background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)' },
+    platforms: PLATFORMS_W2,
+    items: [{ id: 'item_w2_1', x: 220, y: 170, type: '🍄' }],
+    stations: { cuttingBoard: { x: 520, offsetFromGround: 250 }, pot: { x: 1100, offsetFromGround: 280 }, counter: { x: 1700, offsetFromGround: 240 } },
     recipe: {
       name: "Couscous aux Champignons",
       steps: [
-        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 260 },
+        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 220 },
         { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 520 },
         { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1100 },
         { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1700 }
+      ]
+    }
+  },
+  {
+    id: 2,
+    name: "Monde 3 : Volcan Infernal 🔥",
+    bgStyle: { background: 'linear-gradient(180deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%)' },
+    platforms: PLATFORMS_W3,
+    items: [{ id: 'item_w3_1', x: 200, y: 150, type: '🌶️' }],
+    stations: { cuttingBoard: { x: 480, offsetFromGround: 240 }, pot: { x: 1040, offsetFromGround: 270 }, counter: { x: 1620, offsetFromGround: 250 } },
+    recipe: {
+      name: "Merguez piquantes",
+      steps: [
+        { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 200 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 480 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1040 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1620 }
+      ]
+    }
+  },
+  {
+    id: 3,
+    name: "Monde 4 : Vide Cosmique 🔮",
+    bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
+    platforms: PLATFORMS_W4,
+    items: [{ id: 'item_w4_1', x: 250, y: 190, type: '🧄' }],
+    stations: { cuttingBoard: { x: 550, offsetFromGround: 260 }, pot: { x: 1150, offsetFromGround: 240 }, counter: { x: 1750, offsetFromGround: 270 } },
+    recipe: {
+      name: "Pastilla au Poulet & Ail",
+      steps: [
+        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 250 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 550 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1150 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1750 }
+      ]
+    }
+  },
+  {
+    id: 4,
+    name: "Monde 5 : Paradis Céleste ✨",
+    bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
+    platforms: PLATFORMS_W5,
+    items: [{ id: 'item_w5_1', x: 200, y: 160, type: '🍋' }],
+    stations: { cuttingBoard: { x: 500, offsetFromGround: 240 }, pot: { x: 1080, offsetFromGround: 270 }, counter: { x: 1680, offsetFromGround: 250 } },
+    recipe: {
+      name: "Poulet Citron Confit",
+      steps: [
+        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 200 },
+        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
+        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1080 },
+        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1680 }
       ]
     }
   }
@@ -118,31 +175,8 @@ function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0, isGhost 
   const scale = 1.0;
 
   return (
-    <div
-      style={{
-        width: `${f.w * scale}px`,
-        height: `${f.h * scale}px`,
-        overflow: 'hidden',
-        position: 'relative',
-        transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
-        opacity: isGhost ? 0.45 : 1,
-        filter: isGhost ? 'drop-shadow(0 3px 5px rgba(0,0,0,0.2)) grayscale(30%)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.4))'
-      }}
-    >
-      <img
-        src="/chef_sprite.png"
-        alt="Chef"
-        style={{
-          position: 'absolute',
-          left: `${-f.x * scale}px`,
-          top: `${-f.y * scale}px`,
-          width: `${296 * scale}px`,
-          height: `${256 * scale}px`,
-          imageRendering: 'pixelated',
-          maxWidth: 'none',
-          pointerEvents: 'none'
-        }}
-      />
+    <div style={{ width: `${f.w * scale}px`, height: `${f.h * scale}px`, overflow: 'hidden', position: 'relative', transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)', opacity: isGhost ? 0.45 : 1, filter: isGhost ? 'drop-shadow(0 3px 5px rgba(0,0,0,0.2)) grayscale(30%)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.4))' }}>
+      <img src="/chef_sprite.png" alt="Chef" style={{ position: 'absolute', left: `${-f.x * scale}px`, top: `${-f.y * scale}px`, width: `${296 * scale}px`, height: `${256 * scale}px`, imageRendering: 'pixelated', maxWidth: 'none', pointerEvents: 'none' }} />
     </div>
   );
 }
@@ -170,14 +204,24 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v11.5 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.0 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
+
+  // Game completion timer & leaderboard state
+  const [gameStartTime, setGameStartTime] = useState(null);
+  const [totalElapsedTime, setTotalElapsedTime] = useState(0);
+  const [isGameFinished, setIsGameFinished] = useState(false);
+  const [leaderboard, setLeaderboard] = useState([
+    { name: 'Chef Saffron', time: '1m 12s', score: 1500 },
+    { name: 'ZelligeMaster', time: '1m 45s', score: 1500 },
+    { name: 'BaguetteBoss', time: '2m 10s', score: 1500 }
+  ]);
 
   // Portal Transition State
   const [showPortal, setShowPortal] = useState(false);
   const [portalActive, setPortalActive] = useState(false);
 
-  // Achievement / Quest System State (with Ref sync)
+  // Achievement / Quest System State
   const [currentRecipe, setCurrentRecipe] = useState(worldConfig.recipe);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   
@@ -194,11 +238,7 @@ export default function App() {
     setCurrentRecipe(newRecipe);
   };
 
-  const [achievementBanner, setAchievementBanner] = useState({
-    visible: false,
-    text: '',
-    status: 'info'
-  });
+  const [achievementBanner, setAchievementBanner] = useState({ visible: false, text: '', status: 'info' });
 
   const [activeMinigame, setActiveMinigame] = useState(null);
   const [sliderPos, setSliderPos] = useState(0);
@@ -273,6 +313,7 @@ export default function App() {
 
   useEffect(() => {
     if (gameState === 'playing' && !isHost) {
+      setGameStartTime(Date.now());
       setCountdown(3);
       const t1 = setTimeout(() => setCountdown(2), 1000);
       const t2 = setTimeout(() => setCountdown(1), 2000);
@@ -388,7 +429,7 @@ export default function App() {
   };
 
   const handleSpaceAction = () => {
-    if (isHost || countdown !== null) return;
+    if (isHost || countdown !== null || isGameFinished) return;
 
     if (activeMinigame) {
       resolveMinigame();
@@ -421,23 +462,36 @@ export default function App() {
         setStationState(updatedStations);
         updateHolding(null, 'raw');
         setScore(prev => prev + 300);
+
+        // Check if this was World 5 (Final World)
+        if (currentWorldIndex >= WORLDS_CONFIG.length - 1) {
+          const endTime = Date.now();
+          const elapsedSec = Math.floor((endTime - gameStartTime) / 1000);
+          const mins = Math.floor(elapsedSec / 60);
+          const secs = elapsedSec % 60;
+          const timeStr = `${mins}m ${secs}s`;
+          setTotalElapsedTime(timeStr);
+          setIsGameFinished(true);
+
+          setLeaderboard(prev => [...prev, { name: playerName || 'Chef Anonyme', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
+          triggerAchievement("🏆 FÉLICITATIONS ! Vous avez terminé le jeu !", 'success', 6000);
+          return;
+        }
+
         triggerAchievement("🎉 Plat servi avec succès ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
 
-        // Open Animated Portal & Teleport to Next World
+        // Open Portal & Advance to Next World
         setPortalActive(true);
-        setTimeout(() => {
-          setShowPortal(true);
-        }, 800);
+        setTimeout(() => { setShowPortal(true); }, 800);
 
         setTimeout(() => {
-          const nextWorldIdx = (currentWorldIndex + 1) % WORLDS_CONFIG.length;
+          const nextWorldIdx = currentWorldIndex + 1;
           const nextCfg = WORLDS_CONFIG[nextWorldIdx];
           
           setCurrentWorldIndex(nextWorldIdx);
           setWorldItems(nextCfg.items);
           itemsRef.current = nextCfg.items;
           
-          // Instantly sync recipe and reset step index to 0 for the new world
           updateCurrentRecipe(nextCfg.recipe);
           updateActiveStep(0);
 
@@ -495,7 +549,7 @@ export default function App() {
       return;
     }
 
-    // 4. World Pickup (Using recipeRef for accurate current world target step)
+    // 4. World Pickup
     if (!curHolding) {
       let pickedItem = null;
       itemsRef.current.forEach(item => {
@@ -526,7 +580,7 @@ export default function App() {
   };
 
   const handleJumpAction = () => {
-    if (gameState !== 'playing' || isHost || countdown !== null || activeMinigame !== null) return;
+    if (gameState !== 'playing' || isHost || countdown !== null || activeMinigame !== null || isGameFinished) return;
     if (jumpsRef.current > 0) {
       velRef.current.y = -13;
       jumpsRef.current -= 1;
@@ -558,10 +612,10 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isHost, activeMinigame, countdown]);
+  }, [gameState, isHost, activeMinigame, countdown, isGameFinished]);
 
   useEffect(() => {
-    if (gameState !== 'playing' || isHost) return;
+    if (gameState !== 'playing' || isHost || isGameFinished) return;
 
     const gravity = 0.65;
     const friction = 0.82;
@@ -649,7 +703,7 @@ export default function App() {
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, isHost, countdown, activeMinigame, worldConfig]);
+  }, [gameState, isHost, countdown, activeMinigame, worldConfig, isGameFinished]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -729,7 +783,7 @@ export default function App() {
   const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  // Calculate target X position for guidance using recipeRef
+  // Calculate target X position for guidance
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
@@ -853,7 +907,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v11.5)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.0)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -867,14 +921,7 @@ export default function App() {
             <button onClick={createRoom} style={styles.primaryBtn}>👑 Héberger une Partie (Hôte)</button>
             <div style={styles.divider}><span>OU</span></div>
             <form onSubmit={joinRoom} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <input
-                type="text"
-                placeholder="CODE DE SALON"
-                value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                style={styles.input}
-                required
-              />
+              <input type="text" placeholder="CODE DE SALON" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} style={styles.input} required />
               <button type="submit" style={styles.secondaryBtn}>🎮 Rejoindre</button>
             </form>
             <button onClick={() => setScreen('home')} style={styles.backBtn}>⬅️ Retour</button>
@@ -933,6 +980,33 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
 
+          {/* Game Finished Victory Screen Modal & Leaderboard */}
+          {isGameFinished && (
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+              <div style={{ background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '28px', padding: '40px', width: '100%', maxWidth: '600px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
+                <h1 style={{ color: '#fbbf24', fontSize: '2.5rem', fontWeight: '900', margin: '0 0 10px 0' }}>🏆 VICTOIRE TOTALE ! 🏆</h1>
+                <p style={{ color: '#cbd5e1', fontSize: '1.2rem', marginBottom: '20px' }}>Vous avez terminé tous les 5 mondes avec succès !</p>
+                
+                <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '16px', marginBottom: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <p style={{ fontSize: '1.1rem', color: '#38bdf8', fontWeight: '800', margin: '5px 0' }}>⏱️ Temps total : {totalElapsedTime}</p>
+                  <p style={{ fontSize: '1.1rem', color: '#34d399', fontWeight: '800', margin: '5px 0' }}>⭐ Score Final : {score} pts</p>
+                </div>
+
+                <h3 style={{ color: '#fbbf24', marginBottom: '12px' }}>📊 Classement des Chefs (Leaderboard)</h3>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', background: '#0f172a', borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
+                  {leaderboard.map((entry, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: '700', fontSize: '0.95rem' }}>
+                      <span>#{idx + 1} 👨‍🍳 {entry.name}</span>
+                      <span style={{ color: '#fbbf24' }}>{entry.time} ({entry.score} pts)</span>
+                    </div>
+                  ))}
+                </div>
+
+                <button onClick={() => window.location.reload()} style={styles.primaryBtn}>🔄 Rejouer une Partie</button>
+              </div>
+            </div>
+          )}
+
           {/* Off-Screen Pulsing Compass */}
           {isTargetToLeft && (
             <div style={styles.compassLeft} className="pulsing-compass-left">
@@ -947,39 +1021,13 @@ export default function App() {
 
           {/* Achievement Popup Banner */}
           {achievementBanner.visible && (
-            <div style={{
-              position: 'fixed',
-              top: '80px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              background: achievementBanner.status === 'success' ? 'rgba(16, 185, 129, 0.95)' :
-                          achievementBanner.status === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)',
-              color: '#fff',
-              padding: '12px 24px',
-              borderRadius: '16px',
-              fontSize: '1.1rem',
-              fontWeight: '900',
-              zIndex: 100,
-              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-              animation: 'popCountdown 0.3s ease-out'
-            }}>
+            <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', background: achievementBanner.status === 'success' ? 'rgba(16, 185, 129, 0.95)' : achievementBanner.status === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)', color: '#fff', padding: '12px 24px', borderRadius: '16px', fontSize: '1.1rem', fontWeight: '900', zIndex: 100, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', animation: 'popCountdown 0.3s ease-out' }}>
               {achievementBanner.text}
             </div>
           )}
 
           {/* Persistent Quest Tracker Widget */}
-          <div style={{
-            position: 'fixed',
-            top: '70px',
-            right: '20px',
-            background: 'rgba(15, 23, 42, 0.9)',
-            border: '2px solid rgba(251, 191, 36, 0.4)',
-            padding: '14px 18px',
-            borderRadius: '14px',
-            zIndex: 50,
-            width: '270px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.4)'
-          }}>
+          <div style={{ position: 'fixed', top: '70px', right: '20px', background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(251, 191, 36, 0.4)', padding: '14px 18px', borderRadius: '14px', zIndex: 50, width: '270px', boxShadow: '0 10px 25px rgba(0,0,0,0.4)' }}>
             <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
               📜 {currentRecipe.name}
             </div>
@@ -987,15 +1035,7 @@ export default function App() {
               const isCurrent = idx === activeStepIndex;
               const isDone = idx < activeStepIndex;
               return (
-                <div key={idx} style={{
-                  fontSize: '0.85rem',
-                  fontWeight: '700',
-                  color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b',
-                  margin: '4px 0',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}>
+                <div key={idx} style={{ fontSize: '0.85rem', fontWeight: '700', color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>{isDone ? '✅' : isCurrent ? '➡️' : '⏳'}</span>
                   <span style={{ textDecoration: isDone ? 'line-through' : 'none' }}>{step.label}</span>
                 </div>
@@ -1005,31 +1045,12 @@ export default function App() {
 
           {/* Animated Portal Overlay Transition */}
           {showPortal && (
-            <div style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'radial-gradient(circle, rgba(147, 51, 234, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)',
-              zIndex: 200,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <div className="animated-portal" style={{
-                width: '260px',
-                height: '260px',
-                borderRadius: '50%',
-                background: 'conic-gradient(from 0deg, #fbbf24, #38bdf8, #ec4899, #10b981, #fbbf24)',
-                boxShadow: '0 0 60px #fbbf24, inset 0 0 60px #38bdf8',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '5rem'
-              }}>
+            <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(circle, rgba(147, 51, 234, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)', zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="animated-portal" style={{ width: '260px', height: '260px', borderRadius: '50%', background: 'conic-gradient(from 0deg, #fbbf24, #38bdf8, #ec4899, #10b981, #fbbf24)', boxShadow: '0 0 60px #fbbf24, inset 0 0 60px #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5rem' }}>
                 🌀
               </div>
               <h2 style={{ color: '#fbbf24', marginTop: '30px', fontSize: '2rem', fontWeight: '900', textShadow: '0 4px 15px rgba(0,0,0,0.8)' }}>
-                ✨ Téléportation vers un Nouveau Monde... ✨
+                ✨ Téléportation vers le Monde Suivant... ✨
               </h2>
             </div>
           )}
@@ -1037,51 +1058,19 @@ export default function App() {
           {/* On-Screen Mobile Touch Controls */}
           <div style={styles.touchControlsContainer}>
             <div style={styles.touchDpad}>
-              <button
-                style={styles.touchBtn}
-                onTouchStart={() => { keysPressed.current['touchLeft'] = true; }}
-                onTouchEnd={() => { keysPressed.current['touchLeft'] = false; }}
-                onMouseDown={() => { keysPressed.current['touchLeft'] = true; }}
-                onMouseUp={() => { keysPressed.current['touchLeft'] = false; }}
-                onMouseLeave={() => { keysPressed.current['touchLeft'] = false; }}
-              >
-                ◀️
-              </button>
-              <button
-                style={styles.touchBtn}
-                onTouchStart={() => { keysPressed.current['touchRight'] = true; }}
-                onTouchEnd={() => { keysPressed.current['touchRight'] = false; }}
-                onMouseDown={() => { keysPressed.current['touchRight'] = true; }}
-                onMouseUp={() => { keysPressed.current['touchRight'] = false; }}
-                onMouseLeave={() => { keysPressed.current['touchRight'] = false; }}
-              >
-                ▶️
-              </button>
+              <button style={styles.touchBtn} onTouchStart={() => { keysPressed.current['touchLeft'] = true; }} onTouchEnd={() => { keysPressed.current['touchLeft'] = false; }} onMouseDown={() => { keysPressed.current['touchLeft'] = true; }} onMouseUp={() => { keysPressed.current['touchLeft'] = false; }} onMouseLeave={() => { keysPressed.current['touchLeft'] = false; }}>◀️</button>
+              <button style={styles.touchBtn} onTouchStart={() => { keysPressed.current['touchRight'] = true; }} onTouchEnd={() => { keysPressed.current['touchRight'] = false; }} onMouseDown={() => { keysPressed.current['touchRight'] = true; }} onMouseUp={() => { keysPressed.current['touchRight'] = false; }} onMouseLeave={() => { keysPressed.current['touchRight'] = false; }}>▶️</button>
             </div>
             <div style={styles.touchActionPad}>
-              <button
-                style={{ ...styles.touchBtn, background: 'rgba(59, 130, 246, 0.85)' }}
-                onTouchStart={handleJumpAction}
-                onClick={handleJumpAction}
-              >
-                🦘
-              </button>
-              <button
-                style={{ ...styles.touchBtn, background: 'rgba(16, 185, 129, 0.95)', width: '90px', fontSize: '1.1rem' }}
-                onTouchStart={handleSpaceAction}
-                onClick={handleSpaceAction}
-              >
-                ESPACE 🖐️
-              </button>
+              <button style={{ ...styles.touchBtn, background: 'rgba(59, 130, 246, 0.85)' }} onTouchStart={handleJumpAction} onClick={handleJumpAction}>🦘</button>
+              <button style={{ ...styles.touchBtn, background: 'rgba(16, 185, 129, 0.95)', width: '90px', fontSize: '1.1rem' }} onTouchStart={handleSpaceAction} onClick={handleSpaceAction}>ESPACE 🖐️</button>
             </div>
           </div>
 
           {/* Countdown Overlay */}
           {countdown !== null && (
             <div style={styles.countdownOverlay}>
-              <div key={countdown} className="countdown-num" style={styles.countdownText}>
-                {countdown}
-              </div>
+              <div key={countdown} className="countdown-num" style={styles.countdownText}>{countdown}</div>
             </div>
           )}
 
@@ -1092,31 +1081,17 @@ export default function App() {
                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
                   {activeMinigame.type === 'cut' ? '🔪 COUPE !' : '🔥 CUISSON !'}
                 </div>
-                <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>
-                  Appuie sur <strong>ESPACE</strong> dans la zone verte !
-                </p>
-
+                <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>Appuie sur <strong>ESPACE</strong> dans la zone verte !</p>
                 <div style={styles.sliderTrack}>
                   <div style={styles.sweetSpot} />
-                  <div style={{ ...styles.sliderCursor, left: `${sliderPos}%` }}>
-                    {activeMinigame.type === 'cut' ? '🔪' : '🔥'}
-                  </div>
+                  <div style={{ ...styles.sliderCursor, left: `${sliderPos}%` }}>{activeMinigame.type === 'cut' ? '🔪' : '🔥'}</div>
                 </div>
-                <button onClick={resolveMinigame} style={styles.minigameActionBtn}>
-                  Valider ! 🎯
-                </button>
+                <button onClick={resolveMinigame} style={styles.minigameActionBtn}>Valider ! 🎯</button>
               </div>
             </div>
           )}
 
-          <div
-            style={{
-              ...styles.worldLayer,
-              width: `${WORLD_WIDTH}px`,
-              transform: `scale(${zoom}) translate(-${cameraX}px, -${cameraY}px)`,
-              transformOrigin: 'top left'
-            }}
-          >
+          <div style={{ ...styles.worldLayer, width: `${WORLD_WIDTH}px`, transform: `scale(${zoom}) translate(-${cameraX}px, -${cameraY}px)`, transformOrigin: 'top left' }}>
             <div style={{ ...styles.cloud, left: '150px', top: '60px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '620px', top: '90px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
@@ -1125,33 +1100,18 @@ export default function App() {
 
             {worldConfig.platforms.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
-              return (
-                <div
-                  key={idx}
-                  style={{
-                    ...styles.platform,
-                    left: `${p.x}px`,
-                    top: `${platTop}px`,
-                    width: `${p.w}px`,
-                    height: `${p.h}px`
-                  }}
-                />
-              );
+              return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
             {/* Cutting Board Station on Platform */}
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
-                  ▼
-                </div>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
                 <div style={styles.cuttingBoardTop}>
                   {stationState.cuttingBoardItem && (
-                    <div style={{ position: 'absolute', top: '-28px', left: '15px', fontSize: '1.6rem' }}>
-                      {stationState.cuttingBoardItem.type}
-                    </div>
+                    <div style={{ position: 'absolute', top: '-28px', left: '15px', fontSize: '1.6rem' }}>{stationState.cuttingBoardItem.type}</div>
                   )}
                   {stationState.cuttingBoardActive && (
                     <span className="chopping-knife" style={{ position: 'absolute', left: '22px', top: '-18px', fontSize: '1.4rem' }}>🔪</span>
@@ -1166,18 +1126,12 @@ export default function App() {
             {/* Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
-                  ▼
-                </div>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
-                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>
-                  🍲
-                </div>
+                <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>🍲</div>
                 {stationState.potCooking && (
-                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-14px', left: '16px', fontSize: '1.4rem' }}>
-                    🔥 🔥
-                  </div>
+                  <div className="fire-stand" style={{ position: 'absolute', bottom: '-14px', left: '16px', fontSize: '1.4rem' }}>🔥 🔥</div>
                 )}
               </div>
             </div>
@@ -1185,19 +1139,15 @@ export default function App() {
             {/* Serving Counter Station on Platform */}
             <div style={{ position: 'absolute', left: `${stations.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'serve' && isTargetVisible && (
-                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>
-                  ▼
-                </div>
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               {portalActive && (
-                <div className="animated-portal" style={{ position: 'absolute', top: '-60px', left: '-30px', fontSize: '3rem', zIndex: 25 }}>
-                  🌀
-                </div>
+                <div className="animated-portal" style={{ position: 'absolute', top: '-60px', left: '-30px', fontSize: '3rem', zIndex: 25 }}>🌀</div>
               )}
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* Persistent World Ingredients (Always visible on platforms) */}
+            {/* Persistent World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
@@ -1207,27 +1157,11 @@ export default function App() {
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
-                <div
-                  key={idx}
-                  style={{
-                    position: 'absolute',
-                    left: `${item.x}px`,
-                    top: `${itemTop}px`,
-                    transform: 'translateX(-50%)'
-                  }}
-                >
+                <div key={idx} style={{ position: 'absolute', left: `${item.x}px`, top: `${itemTop}px`, transform: 'translateX(-50%)' }}>
                   {isItemVisibleOnScreen && (
-                    <div className="holding-arrow" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 12px #f59e0b' }}>
-                      ▼
-                    </div>
+                    <div className="holding-arrow" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 12px #f59e0b' }}>▼</div>
                   )}
-                  <div
-                    className={isTargetItem ? "golden-glow-item" : ""}
-                    style={{
-                      fontSize: '1.8rem',
-                      filter: isTargetItem ? 'drop-shadow(0 0 16px #fbbf24) drop-shadow(0 0 30px #f59e0b)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))'
-                    }}
-                  >
+                  <div className={isTargetItem ? "golden-glow-item" : ""} style={{ fontSize: '1.8rem', filter: isTargetItem ? 'drop-shadow(0 0 16px #fbbf24) drop-shadow(0 0 30px #f59e0b)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))' }}>
                     {item.type}
                   </div>
                 </div>
@@ -1239,36 +1173,30 @@ export default function App() {
             {/* Local Player Render */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
               {holdingItem && (
-                <div className="holding-arrow" style={styles.holdingIndicator}>
-                  ▼ {holdingItem} ({holdingState})
-                </div>
+                <div className="holding-arrow" style={styles.holdingIndicator}>▼ {holdingItem} ({holdingState})</div>
               )}
               <div style={{ ...styles.tag, border: '1.5px solid #fbbf24' }}>{playerName}</div>
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} isGhost={false} />
             </div>
 
             {/* Remote Competitor Ghost Render */}
-            {Object.keys(players)
-              .filter(pid => pid !== myId)
-              .map(pid => {
-                const p = players[pid];
-                const px = p.x || 140;
-                const py = floorY - (p.heightAboveGround || 0);
-                const pAnim = p.anim || 'idle';
-                const pFacing = p.facingRight !== undefined ? p.facingRight : true;
+            {Object.keys(players).filter(pid => pid !== myId).map(pid => {
+              const p = players[pid];
+              const px = p.x || 140;
+              const py = floorY - (p.heightAboveGround || 0);
+              const pAnim = p.anim || 'idle';
+              const pFacing = p.facingRight !== undefined ? p.facingRight : true;
 
-                return (
-                  <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
-                    {p.holding && (
-                      <div className="holding-arrow" style={{ ...styles.holdingIndicator, opacity: 0.5 }}>
-                        ▼ {p.holding}
-                      </div>
-                    )}
-                    <div style={{ ...styles.tag, opacity: 0.6 }}>👻 {p.name}</div>
-                    <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} isGhost={true} />
-                  </div>
-                );
-              })}
+              return (
+                <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
+                  {p.holding && (
+                    <div className="holding-arrow" style={{ ...styles.holdingIndicator, opacity: 0.5 }}>▼ {p.holding}</div>
+                  )}
+                  <div style={{ ...styles.tag, opacity: 0.6 }}>👻 {p.name}</div>
+                  <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} isGhost={true} />
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
