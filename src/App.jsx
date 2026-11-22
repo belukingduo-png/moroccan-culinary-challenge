@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.9-zellige";
+const APP_VERSION = "v10.0-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.9 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v10.0 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -373,12 +373,11 @@ export default function App() {
         setScore(prev => prev + 250);
         triggerAchievement("🎉 Plat servi avec succès ! +250 pts Bonus !", 'success', 4000);
 
+        // Pick next recipe and synchronously reset step index to 0
         const newRecipe = RECIPES_POOL[Math.floor(Math.random() * RECIPES_POOL.length)];
-        setTimeout(() => {
-          setCurrentRecipe(newRecipe);
-          updateActiveStep(0);
-          triggerAchievement(`Nouvelle Recette : ${newRecipe.name} - Objectif : ${newRecipe.steps[0].label}`, 'info', 4000);
-        }, 1500);
+        setCurrentRecipe(newRecipe);
+        updateActiveStep(0);
+        triggerAchievement(`Nouvelle Recette : ${newRecipe.name} - Objectif : ${newRecipe.steps[0].label}`, 'info', 4000);
 
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
       } else if (step && step.id === 'serve') {
@@ -442,7 +441,6 @@ export default function App() {
       });
 
       if (pickedItem) {
-        // Robust trimming & comparison of target item vs picked item
         const cleanedPicked = pickedItem.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
         const cleanedTarget = step.targetItem.replace(/[\ufe00-\ufe0f]/g, '').trim();
 
@@ -455,7 +453,7 @@ export default function App() {
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
         } else {
           setScore(prev => Math.max(0, prev - 20));
-          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem.type}) ! -20 pts`, 'error', 3000);
+          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem.type}) ! -20 pts (Il faut : ${step.targetItem})`, 'error', 3500);
         }
       }
     }
@@ -785,7 +783,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.9)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v10.0)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1092,7 +1090,7 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients (with huge pulsing glow and large down arrow when visible) */}
+            {/* World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
               const cleanedItem = item.type.replace(/[\ufe00-\ufe0f]/g, '').trim();
