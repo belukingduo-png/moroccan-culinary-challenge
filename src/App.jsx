@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v4.5";
+const APP_VERSION = "v4.6";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -66,7 +66,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.5 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.6 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
@@ -115,14 +115,14 @@ export default function App() {
     return { name: randomName, emoji: randomEmoji };
   };
 
-  const syncLiveAchievement = (completedText, nextText) => {
-    const successPayload = { text: completedText, state: 'success', id: Date.now() };
+  const syncLiveAchievement = (completedText, nextText, isError = false) => {
+    const successPayload = { text: completedText, state: isError ? 'error' : 'success', id: Date.now() };
     setAchievementPopup(successPayload);
     if (db && roomCode) {
       update(ref(db, `rooms/${roomCode}`), { achievement: successPayload });
     }
 
-    if (nextText) {
+    if (nextText && !isError) {
       setTimeout(() => {
         const nextPayload = { text: nextText, state: 'active', id: Date.now() };
         setAchievementPopup(nextPayload);
@@ -293,7 +293,7 @@ export default function App() {
           scoreRef.current = penaltyScore;
           if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
           addLog(`❌ MAUVAIS USTENSILE ! Ce plat ne va pas dans ${nearby.label} (-5 pts)`);
-          syncLiveAchievement(`❌ Mauvais ustensile ! (-5 pts)`, `Chef Droit : Utiliser le bon pot 🍲 / 🫖`);
+          syncLiveAchievement(`❌ Mauvais ustensile ! (-5 pts)`, null, true);
           return;
         }
         const itemToCook = currentItem;
@@ -313,7 +313,7 @@ export default function App() {
     else if (nearby.type === 'pass') {
       if (currentItem === activeTicket.requiredItem) {
         addLog(`❌ ERREUR PASSE-PLATS : Vous devez d'abord découper l'ingrédient sur la planche 🔪 !`);
-        syncLiveAchievement(`❌ Découpez l'ingrédient d'abord !`, `Chef Gauche : Planche 🔪`);
+        syncLiveAchievement(`❌ Découpez l'ingrédient d'abord !`, null, true);
         return;
       }
 
@@ -348,7 +348,7 @@ export default function App() {
         const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
         syncLiveAchievement(
           `✅ Posé sur le Passe-Plats 🪟 (+5 pts)`,
-          `Chef Droit : Prendre l'ingrédient du Passe-Plats 🪟 puis cuire dans ${correctPotName} 🔥`
+          `Chef Droit : Prendre du Passe-Plats 🪟 puis cuire dans ${correctPotName} 🔥`
         );
 
         addLog(`🪟 ${playerName} a passé ${dropped} (+5 pts) !`);
@@ -393,6 +393,7 @@ export default function App() {
         scoreRef.current = penaltyScore;
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
         addLog(`❌ ERREUR DE SERVICE ! Plat non conforme (-5 pts)`);
+        syncLiveAchievement(`❌ Plat non conforme (-5 pts)`, null, true);
       }
     }
   };
@@ -446,6 +447,7 @@ export default function App() {
       scoreRef.current = penaltyScore;
       if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
       addLog(`❌ CUISSON RATÉE ! Température incorrecte (-5 pts)`);
+      syncLiveAchievement(`❌ Cuisson ratée (-5 pts)`, null, true);
     }
     setTempMinigame(null);
   };
@@ -454,6 +456,7 @@ export default function App() {
     if (!minigameData) return;
     const updatedTaps = minigameData.currentTaps + 1;
     if (updatedTaps >= minigameData.targetTaps) {
+      // FIX: Mint (🌿) correctly maps to prepped state 🌿
       const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🌿': '🌿' };
       const result = choppedMap[minigameData.item] || '🥗';
       
@@ -566,7 +569,7 @@ export default function App() {
       }
     });
 
-    const lbRef = ref(db, 'leaderboard_v45');
+    const lbRef = ref(db, 'leaderboard_v46');
     const unsubLb = onValue(lbRef, (snapshot) => {
       const lbData = snapshot.val();
       if (lbData) {
@@ -594,7 +597,7 @@ export default function App() {
         clearInterval(interval);
         if (isHost && db && roomCode) {
           update(ref(db, `rooms/${roomCode}`), { status: 'gameover' });
-          push(ref(db, 'leaderboard_v45'), {
+          push(ref(db, 'leaderboard_v46'), {
             room: roomCode,
             score: scoreRef.current,
             date: new Date().toLocaleDateString()
@@ -996,10 +999,10 @@ export default function App() {
               {achievementPopup && (
                 <div key={achievementPopup.id || achievementPopup.text} className="achievement-card" style={{
                   ...styles.achievementBanner,
-                  background: achievementPopup.state === 'success' ? 'rgba(16, 185, 129, 0.95)' : 'rgba(30, 27, 75, 0.95)',
-                  borderColor: achievementPopup.state === 'success' ? '#34d399' : '#fbbf24'
+                  background: achievementPopup.state === 'success' ? 'rgba(16, 185, 129, 0.95)' : (achievementPopup.state === 'error' ? 'rgba(153, 27, 27, 0.95)' : 'rgba(30, 27, 75, 0.95)'),
+                  borderColor: achievementPopup.state === 'success' ? '#34d399' : (achievementPopup.state === 'error' ? '#ef4444' : '#fbbf24')
                 }}>
-                  <span style={{ fontSize: '1.5rem' }}>{achievementPopup.state === 'success' ? '✅' : '🔔'}</span>
+                  <span style={{ fontSize: '1.5rem' }}>{achievementPopup.state === 'success' ? '✅' : '❌'}</span>
                   <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff' }}>{achievementPopup.text}</span>
                 </div>
               )}
