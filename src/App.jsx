@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.2-achievement";
+const APP_VERSION = "v9.3-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.2 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.3 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -411,7 +411,12 @@ export default function App() {
       let pickedItem = null;
       const remainingItems = itemsRef.current.filter(item => {
         const xDist = Math.abs(px - item.x);
-        if (xDist < 80 && !pickedItem) {
+        // Check platform alignment for items placed on platforms
+        const itemPlatform = PLATFORM_LAYOUT.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
+        const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
+        const yDist = Math.abs(py - itemWorldY);
+
+        if (xDist < 60 && yDist < 60 && !pickedItem) {
           pickedItem = item;
           return false;
         }
@@ -716,7 +721,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.2 Achievement)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.3)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
