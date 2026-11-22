@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.0";
+const APP_VERSION = "v6.2";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -22,26 +22,11 @@ const RANDOM_NAMES = [
 ];
 
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
+const INGREDIENT_TYPES = ['🍅', '🥩', '🧄', '🌶️', '🫖', '🥖', '🧀', '🍄', '🍋'];
 
 const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 80;
-const HITBOX_HALF_W = 18;
-
-// Scattered Moroccan ingredients, cutting board, pot, and counter stations
-const INITIAL_ITEMS = [
-  { id: 'item_1', x: 220, y: 130, type: '🍅', state: 'raw' },
-  { id: 'item_2', x: 500, y: 230, type: '🥩', state: 'raw' },
-  { id: 'item_3', x: 780, y: 140, type: '🧄', state: 'raw' },
-  { id: 'item_4', x: 1050, y: 260, type: '🌶️', state: 'raw' },
-  { id: 'item_5', x: 400, y: 0, type: '🫖', state: 'raw' },
-  { id: 'item_6', x: 1200, y: 0, type: '🥖', state: 'raw' }
-];
-
-const STATIONS = {
-  cuttingBoard: { x: 650, y: 140, label: ' chopping' },
-  pot: { x: 1150, y: 260, label: ' cooking' },
-  counter: { x: 1700, y: 0, label: ' serving' }
-};
+const HITBOX_HALF_W = 16;
 
 const PLATFORM_LAYOUT = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
@@ -53,17 +38,24 @@ const PLATFORM_LAYOUT = [
   { x: 1880, offsetFromGround: 180, w: 240, h: 24 }
 ];
 
+const STATIONS = {
+  cuttingBoard: { x: 650, y: 140 },
+  pot: { x: 1150, y: 260 },
+  counter: { x: 1700, y: 0 }
+};
+
+// Corrected pixel coordinates for Chef W2.png (fall is the precise parachute frame on row 1)
 const SPRITE_STATES = {
   idle: [{ x: 35, y: 18, w: 34, h: 42 }],
   run: [{ x: 35, y: 112, w: 36, h: 42 }, { x: 74, y: 112, w: 36, h: 42 }],
   jump: [{ x: 28, y: 160, w: 42, h: 38 }],
-  fall: [{ x: 175, y: 14, w: 56, h: 54 }]
+  fall: [{ x: 224, y: 12, w: 48, h: 48 }]
 };
 
 function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
   const frames = SPRITE_STATES[anim] || SPRITE_STATES.idle;
   const f = frames[frameTick % frames.length];
-  const scale = 2.2;
+  const scale = 1.0;
 
   return (
     <div
@@ -73,7 +65,7 @@ function ChefSprite({ anim = 'idle', facingRight = true, frameTick = 0 }) {
         overflow: 'hidden',
         position: 'relative',
         transform: facingRight ? 'scaleX(1)' : 'scaleX(-1)',
-        filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.4))'
+        filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.4))'
       }}
     >
       <img
@@ -102,7 +94,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const [players, setPlayers] = useState({});
-  const [worldItems, setWorldItems] = useState(INITIAL_ITEMS);
+  const [worldItems, setWorldItems] = useState([]);
   const [stationState, setStationState] = useState({
     cuttingBoardItem: null,
     potItem: null,
@@ -111,7 +103,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.0 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.2 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -132,7 +124,7 @@ export default function App() {
   const facingRef = useRef(true);
   const keysPressed = useRef({});
   const viewportRef = useRef(viewport);
-  const itemsRef = useRef(INITIAL_ITEMS);
+  const itemsRef = useRef([]);
   const stationRef = useRef(stationState);
 
   const backgroundParticles = useMemo(() => {
@@ -170,6 +162,22 @@ export default function App() {
 
   const getRandomName = () => RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 
+  const generateRandomIngredients = () => {
+    return [
+      { id: 'item_1', x: 250, y: 130, type: INGREDIENT_TYPES[0] },
+      { id: 'item_2', x: 520, y: 230, type: INGREDIENT_TYPES[1] },
+      { id: 'item_3', x: 830, y: 140, type: INGREDIENT_TYPES[2] },
+      { id: 'item_4', x: 1100, y: 260, type: INGREDIENT_TYPES[3] },
+      { id: 'item_5', x: 1420, y: 170, type: INGREDIENT_TYPES[4] },
+      { id: 'item_6', x: 1750, y: 270, type: INGREDIENT_TYPES[5] },
+      { id: 'item_7', x: 2050, y: 180, type: INGREDIENT_TYPES[6] },
+      { id: 'item_8', x: 450, y: 0, type: INGREDIENT_TYPES[7] },
+      { id: 'item_9', x: 950, y: 0, type: INGREDIENT_TYPES[8] },
+      { id: 'item_10', x: 1550, y: 0, type: INGREDIENT_TYPES[0] },
+      { id: 'item_11', x: 2200, y: 0, type: INGREDIENT_TYPES[1] }
+    ];
+  };
+
   const syncMyState = (newPos, floorY, currentAnim, isRight, carriedItem) => {
     if (db && roomCode) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
@@ -183,15 +191,12 @@ export default function App() {
     }
   };
 
-  // Interaction with Spacebar (Pickup ingredients or interact with stations)
   const handleSpaceAction = () => {
     const floorY = viewportRef.current.h - GROUND_HEIGHT;
     const px = posRef.current.x;
     const py = posRef.current.y;
 
-    // 1. Check Serving Counter (pickup finished dish or serve)
-    const counterWorldX = STATIONS.counter.x;
-    if (Math.abs(px - counterWorldX) < 50) {
+    if (Math.abs(px - STATIONS.counter.x) < 50) {
       if (stationRef.current.potItem && stationRef.current.potItem.state === 'cooked' && !holdingItem) {
         setHoldingItem(stationRef.current.potItem.type);
         const updatedStations = { ...stationRef.current, potItem: null };
@@ -200,7 +205,6 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
         return;
       } else if (holdingItem) {
-        // Serve dish
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
@@ -210,10 +214,9 @@ export default function App() {
       }
     }
 
-    // 2. Check Cutting Board
-    const cbWorldX = STATIONS.cuttingBoard.x;
-    const cbWorldY = floorY - STATIONS.cuttingBoard.y;
-    if (Math.abs(px - cbWorldX) < 50 && Math.abs(py - cbWorldY) < 50) {
+    const cbX = STATIONS.cuttingBoard.x;
+    const cbY = floorY - STATIONS.cuttingBoard.y;
+    if (Math.abs(px - cbX) < 50 && Math.abs(py - cbY) < 50) {
       if (holdingItem && !stationRef.current.cuttingBoardItem) {
         const newItem = { type: holdingItem, state: 'chopped' };
         setHoldingItem(null);
@@ -232,10 +235,9 @@ export default function App() {
       }
     }
 
-    // 3. Check Cooking Pot
-    const potWorldX = STATIONS.pot.x;
-    const potWorldY = floorY - STATIONS.pot.y;
-    if (Math.abs(px - potWorldX) < 50 && Math.abs(py - potWorldY) < 50) {
+    const potX = STATIONS.pot.x;
+    const potY = floorY - STATIONS.pot.y;
+    if (Math.abs(px - potX) < 50 && Math.abs(py - potY) < 50) {
       if (holdingItem && !stationRef.current.potItem) {
         const newItem = { type: holdingItem, state: 'cooked' };
         setHoldingItem(null);
@@ -244,7 +246,6 @@ export default function App() {
         setStationState(updatedStations);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-        // Simulate cooking process
         setTimeout(() => {
           const finished = { type: '🍲 Tajine', state: 'cooked' };
           stationRef.current = { ...stationRef.current, potItem: finished, potCooking: false };
@@ -255,7 +256,6 @@ export default function App() {
       }
     }
 
-    // 4. Pickup from World Items
     if (!holdingItem) {
       const updatedItems = itemsRef.current.map(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
@@ -273,7 +273,6 @@ export default function App() {
     }
   };
 
-  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing') return;
@@ -302,7 +301,6 @@ export default function App() {
     };
   }, [gameState, holdingItem]);
 
-  // Physics loop
   useEffect(() => {
     if (gameState !== 'playing') return;
 
@@ -392,7 +390,6 @@ export default function App() {
     return () => clearInterval(interval);
   }, [gameState, holdingItem]);
 
-  // Firebase sync
   useEffect(() => {
     if (!db || !roomCode) return;
     const roomRef = ref(db, `rooms/${roomCode}`);
@@ -429,10 +426,11 @@ export default function App() {
     setPlayerName(name);
     setScreen('host_lobby');
 
+    const randomItems = generateRandomIngredients();
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
-        items: INITIAL_ITEMS,
+        items: randomItems,
         stations: { cuttingBoardItem: null, potItem: null, potCooking: false, servedDishes: 0 },
         logs: [`👑 Salon ${code} ouvert`]
       });
@@ -463,7 +461,8 @@ export default function App() {
   };
 
   const floorY = viewport.h - GROUND_HEIGHT;
-  const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w, pos.x - viewport.w / 2));
+  const zoom = 1.5;
+  const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
 
   return (
     <div style={styles.appContainer}>
@@ -605,7 +604,8 @@ export default function App() {
             style={{
               ...styles.worldLayer,
               width: `${WORLD_WIDTH}px`,
-              transform: `translateX(-${cameraX}px)`
+              transform: `scale(${zoom}) translateX(-${cameraX}px)`,
+              transformOrigin: 'top left'
             }}
           >
             <div style={{ ...styles.cloud, left: '150px', top: '60px' }}>☁️</div>
@@ -614,12 +614,6 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
 
-            <div style={{ ...styles.bush, left: '80px', width: '110px' }} />
-            <div style={{ ...styles.bush, left: '650px', width: '140px' }} />
-            <div style={{ ...styles.bush, left: '1220px', width: '120px' }} />
-            <div style={{ ...styles.bush, left: '1850px', width: '160px' }} />
-
-            {/* Platforms */}
             {PLATFORM_LAYOUT.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
               return (
@@ -636,35 +630,31 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Station */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 40}px`, top: `${floorY - STATIONS.cuttingBoard.y - 36}px`, textAlign: 'center' }}>
               <div style={styles.stationBoard}>🪵 Cutting Board</div>
               {stationState.cuttingBoardItem && (
-                <div style={{ position: 'absolute', top: '-30px', left: '25px', fontSize: '1.8rem' }}>
+                <div style={{ position: 'absolute', top: '-30px', left: '25px', fontSize: '1.6rem' }}>
                   {stationState.cuttingBoardItem.type}
-                  <span className="chopping-knife" style={{ position: 'absolute', left: '15px', top: '-10px', fontSize: '1.4rem' }}>🔪</span>
+                  <span className="chopping-knife" style={{ position: 'absolute', left: '15px', top: '-10px', fontSize: '1.2rem' }}>🔪</span>
                 </div>
               )}
             </div>
 
-            {/* Cooking Pot Station */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 40}px`, top: `${floorY - STATIONS.pot.y - 42}px`, textAlign: 'center' }}>
               <div className={stationState.potCooking ? "boiling-pot" : ""} style={styles.stationPot}>
                 🍲 Pot {stationState.potCooking ? '(Cuisson...)' : ''}
               </div>
               {stationState.potItem && (
-                <div style={{ position: 'absolute', top: '-30px', left: '30px', fontSize: '1.8rem' }}>
+                <div style={{ position: 'absolute', top: '-30px', left: '30px', fontSize: '1.6rem' }}>
                   {stationState.potItem.type}
                 </div>
               )}
             </div>
 
-            {/* Serving Counter Station */}
             <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 50}px`, top: `${floorY - 60}px`, textAlign: 'center' }}>
               <div style={styles.counterBox}>🛎️ Serving Counter</div>
             </div>
 
-            {/* World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 38 : floorY - item.y - 34;
               return (
@@ -674,8 +664,8 @@ export default function App() {
                     position: 'absolute',
                     left: `${item.x}px`,
                     top: `${itemTop}px`,
-                    fontSize: '2rem',
-                    filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))',
+                    fontSize: '1.8rem',
+                    filter: 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
                     transform: 'translateX(-50%)'
                   }}
                 >
@@ -750,13 +740,12 @@ const styles = {
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.8)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
-  bush: { position: 'absolute', bottom: '80px', height: '36px', background: '#4ade80', border: '3px solid #16a34a', borderRadius: '12px 12px 0 0' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
   ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 16px, #78350f 16px, #78350f 32px)', borderTop: '8px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
-  holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.9rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
-  stationBoard: { background: '#92400e', color: '#fef3c7', padding: '6px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #78350f', fontSize: '0.85rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
-  stationPot: { background: '#374151', color: '#f3f4f6', padding: '6px 14px', borderRadius: '8px', fontWeight: '800', border: '2px solid #1f2937', fontSize: '0.85rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' },
-  counterBox: { background: '#b45309', color: '#fff', padding: '8px 16px', borderRadius: '10px', fontWeight: '900', border: '3px solid #78350f', fontSize: '0.9rem', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' }
+  holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
+  stationBoard: { background: '#92400e', color: '#fef3c7', padding: '4px 10px', borderRadius: '8px', fontWeight: '800', border: '2px solid #78350f', fontSize: '0.75rem', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
+  stationPot: { background: '#374151', color: '#f3f4f6', padding: '4px 12px', borderRadius: '8px', fontWeight: '800', border: '2px solid #1f2937', fontSize: '0.75rem', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
+  counterBox: { background: '#b45309', color: '#fff', padding: '6px 14px', borderRadius: '10px', fontWeight: '900', border: '3px solid #78350f', fontSize: '0.8rem', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }
 };
