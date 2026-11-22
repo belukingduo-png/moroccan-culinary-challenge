@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.3";
+const APP_VERSION = "v8.4";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.3 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.4 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -347,7 +347,7 @@ export default function App() {
     const counterWorldY = floorY - counterPlatform.offsetFromGround;
 
     // 1. Serving Counter
-    if (Math.abs(px - STATIONS.counter.x) < 55 && Math.abs(py - counterWorldY) < 55) {
+    if (Math.abs(px - STATIONS.counter.x) < 70 && Math.abs(py - counterWorldY) < 70) {
       if (holdingItem && holdingState === 'cooked' && questStep === 3) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
@@ -363,8 +363,8 @@ export default function App() {
       return;
     }
 
-    // 2. Cutting Board Station
-    if (Math.abs(px - STATIONS.cuttingBoard.x) < 55 && Math.abs(py - cbWorldY) < 55) {
+    // 2. Cutting Board Station (Generous hitbox range < 70px)
+    if (Math.abs(px - STATIONS.cuttingBoard.x) < 70 && Math.abs(py - cbWorldY) < 70) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'raw' && questStep === 1) {
         const itemType = holdingItem;
         setHoldingItem(null);
@@ -379,8 +379,8 @@ export default function App() {
       return;
     }
 
-    // 3. Pot Station
-    if (Math.abs(px - STATIONS.pot.x) < 55 && Math.abs(py - potWorldY) < 55) {
+    // 3. Pot Station (Generous hitbox range < 70px)
+    if (Math.abs(px - STATIONS.pot.x) < 70 && Math.abs(py - potWorldY) < 70) {
       if (holdingItem === currentRecipe.ingredient && holdingState === 'chopped' && questStep === 2) {
         const itemType = holdingItem;
         setHoldingItem(null);
@@ -395,16 +395,16 @@ export default function App() {
       return;
     }
 
-    // 4. Pickup from World Items (Fixed: filters out the picked up item correctly and advances step 0 -> 1)
+    // 4. Pickup from World Items (Very generous range < 90px & auto-forces questStep 0 -> 1)
     if (!holdingItem && questStep === 0) {
       let pickedType = null;
       const remainingItems = itemsRef.current.filter(item => {
         const itemWorldY = item.y === 0 ? floorY : floorY - item.y;
         const dist = Math.hypot(px - item.x, py - itemWorldY);
-        if (dist < 60 && !pickedType) {
+        if (dist < 90 && !pickedType) {
           if (item.type === currentRecipe.ingredient) {
             pickedType = item.type;
-            return false; // remove from world items
+            return false;
           } else {
             triggerQuestFeedback('error', false);
           }
@@ -418,7 +418,8 @@ export default function App() {
         itemsRef.current = remainingItems;
         setWorldItems(remainingItems);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
-        triggerQuestFeedback('success', true);
+        setQuestStep(1); // Force advance immediately to cutting step
+        triggerQuestFeedback('success', false);
       }
     }
   };
