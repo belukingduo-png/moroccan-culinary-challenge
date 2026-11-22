@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v8.7";
+const APP_VERSION = "v8.9";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.7 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v8.9 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [recipeIndex, setRecipeIndex] = useState(0);
@@ -424,7 +424,9 @@ export default function App() {
         itemsRef.current = remainingItems;
         setWorldItems(remainingItems);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/items`), remainingItems);
-        triggerQuestFeedback('success', 1); // Step 1: Cutting
+        
+        // 👉 Successfully advances to Step 1 (Cutting) and shows green success banner!
+        triggerQuestFeedback('success', 1);
       }
     }
   };
