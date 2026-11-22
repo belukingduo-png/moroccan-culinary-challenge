@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v9.6-zellige";
+const APP_VERSION = "v9.8-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -132,7 +132,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.6 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v9.8 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   // Achievement / Quest System State
@@ -282,11 +282,13 @@ export default function App() {
         updateActiveStep(activeStepIndexRef.current + 1);
         setActiveMinigame(null);
       } else {
-        setScore(prev => Math.max(0, prev - 15));
-        triggerAchievement("❌ Coupe ratée ! -15 pts (Réessaie sur la planche)", 'error', 3500);
+        setScore(prev => Math.max(0, prev - 20));
+        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient) 🍅", 'error', 4000);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
+        updateHolding(null, 'raw');
+        updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
         setActiveMinigame(null);
       }
@@ -302,11 +304,13 @@ export default function App() {
         updateActiveStep(activeStepIndexRef.current + 1);
         setActiveMinigame(null);
       } else {
-        setScore(prev => Math.max(0, prev - 15));
-        triggerAchievement("❌ Température incorrecte ! -15 pts (Réessaie dans le pot)", 'error', 3500);
+        setScore(prev => Math.max(0, prev - 20));
+        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient) 🍅", 'error', 4000);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
+        updateHolding(null, 'raw');
+        updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
         setActiveMinigame(null);
       }
@@ -661,7 +665,7 @@ export default function App() {
   const counterPlatform = PLATFORM_LAYOUT.find(p => p.offsetFromGround === STATIONS.counter.offsetFromGround);
   const counterTop = floorY - counterPlatform.offsetFromGround - 52;
 
-  // Calculate target X position for screen-edge directional compass
+  // Calculate target X position for guidance
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
@@ -674,8 +678,12 @@ export default function App() {
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = STATIONS.counter.x;
   }
-  const isTargetToRight = targetWorldX > pos.x + 40;
-  const isTargetToLeft = targetWorldX < pos.x - 40;
+
+  // Determine if target is currently visible inside viewport bounds
+  const viewWidthWorld = viewport.w / zoom;
+  const isTargetVisible = targetWorldX >= cameraX && targetWorldX <= cameraX + viewWidthWorld;
+  const isTargetToLeft = !isTargetVisible && targetWorldX < cameraX;
+  const isTargetToRight = !isTargetVisible && targetWorldX > cameraX + viewWidthWorld;
 
   return (
     <div style={styles.appContainer}>
@@ -735,9 +743,9 @@ export default function App() {
           animation: popCountdown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes goldenPulse {
-          0% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
-          50% { transform: scale(1.15); filter: drop-shadow(0 0 14px #fbbf24); }
-          100% { transform: scale(1); filter: drop-shadow(0 0 4px #fbbf24); }
+          0% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 4px #fbbf24); }
+          50% { transform: scale(1.12) translateX(-45%); filter: drop-shadow(0 0 14px #fbbf24); }
+          100% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 4px #fbbf24); }
         }
         .golden-glow-item {
           animation: goldenPulse 0.8s ease-in-out infinite;
@@ -759,7 +767,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.6)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v9.8)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -838,15 +846,15 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}</span>
           </div>
 
-          {/* Off-Screen Directional Compass / Indicator */}
+          {/* Off-Screen Directional Compass (only shown if target is NOT visible on screen) */}
           {isTargetToLeft && (
             <div style={styles.compassLeft}>
-              <span style={{ fontSize: '1.4rem' }}>⬅️ 🌟</span> Direction Objectif
+              <span style={{ fontSize: '1.4rem' }}>⬅️ 🌟</span> Hors écran (À gauche)
             </div>
           )}
           {isTargetToRight && (
             <div style={styles.compassRight}>
-              Direction Objectif <span style={{ fontSize: '1.4rem' }}>🌟 ➡️</span>
+              Hors écran (À droite) <span style={{ fontSize: '1.4rem' }}>🌟 ➡️</span>
             </div>
           )}
 
@@ -1013,8 +1021,13 @@ export default function App() {
               );
             })}
 
-            {/* Cutting Board Station on Platform */}
+            {/* Cutting Board Station on Platform (with golden glow & down arrow if visible target) */}
             <div style={{ position: 'absolute', left: `${STATIONS.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
+              {currentStepObj.id === 'cut' && isTargetVisible && (
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '18px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                  ▼
+                </div>
+              )}
               <div style={styles.stationStand}>
                 <div style={styles.cuttingBoardTop}>
                   {stationState.cuttingBoardItem && (
@@ -1034,6 +1047,11 @@ export default function App() {
 
             {/* Cooking Pot Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
+              {currentStepObj.id === 'cook' && isTargetVisible && (
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '18px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                  ▼
+                </div>
+              )}
               <div style={styles.stationStand}>
                 <div className={stationState.potCooking ? "boiling-pot" : ""} style={{ fontSize: '3.6rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))', marginTop: '-26px' }}>
                   🍲
@@ -1048,34 +1066,51 @@ export default function App() {
 
             {/* Serving Counter Station on Platform */}
             <div style={{ position: 'absolute', left: `${STATIONS.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
+              {currentStepObj.id === 'serve' && isTargetVisible && (
+                <div className="holding-arrow" style={{ position: 'absolute', top: '-38px', left: '12px', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                  ▼
+                </div>
+              )}
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* World Ingredients (with golden glow on the correct target item) */}
+            {/* World Ingredients (with golden glow and down arrow when visible on screen) */}
             {worldItems.map((item, idx) => {
               const itemTop = item.y === 0 ? floorY - 34 : floorY - item.y - 34;
               const isTargetItem = currentStepObj.id === 'pickup' && item.type === currentStepObj.targetItem;
+              const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
+
               return (
                 <div
                   key={idx}
-                  className={isTargetItem ? "golden-glow-item" : ""}
                   style={{
                     position: 'absolute',
                     left: `${item.x}px`,
                     top: `${itemTop}px`,
-                    fontSize: '1.8rem',
-                    filter: isTargetItem ? 'drop-shadow(0 0 12px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))',
                     transform: 'translateX(-50%)'
                   }}
                 >
-                  {item.type}
+                  {isItemVisibleOnScreen && (
+                    <div className="holding-arrow" style={{ position: 'absolute', top: '-32px', left: '50%', transform: 'translateX(-50%)', fontSize: '1.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 10 }}>
+                      ▼
+                    </div>
+                  )}
+                  <div
+                    className={isTargetItem ? "golden-glow-item" : ""}
+                    style={{
+                      fontSize: '1.8rem',
+                      filter: isTargetItem ? 'drop-shadow(0 0 12px #fbbf24)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))'
+                    }}
+                  >
+                    {item.type}
+                  </div>
                 </div>
               );
             })}
 
             <div style={styles.ground} />
 
-            {/* Local Player Render (Cleaned up, no hovering arrow above head) */}
+            {/* Local Player Render */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
               {holdingItem && (
                 <div className="holding-arrow" style={styles.holdingIndicator}>
