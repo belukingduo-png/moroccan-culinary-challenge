@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v3.9";
+const APP_VERSION = "v4.1";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -58,7 +58,7 @@ export default function App() {
   const [endTime, setEndTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v3.9 Prête']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.1 Prête']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -68,11 +68,10 @@ export default function App() {
   const [myContributions, setMyContributions] = useState(0);
 
   const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
-  const [recipeStep, setRecipeStep] = useState(1);
   const [stationStates, setStationStates] = useState({});
   const [minigameData, setMinigameData] = useState(null);
   const [tempMinigame, setTempMinigame] = useState(null);
-  const [achievementPopup, setAchievementPopup] = useState({ text: 'Prendre la Tomate 🍅', state: 'active' });
+  const [achievementPopup, setAchievementPopup] = useState({ text: 'Chef Gauche : Prendre 🍅', state: 'active' });
   const [congratsModal, setCongratsModal] = useState(null);
   const [pausedTimer, setPausedTimer] = useState(false);
 
@@ -98,11 +97,20 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const updateAchievement = (text, isSuccess = false) => {
-    setAchievementPopup({ text, state: isSuccess ? 'success' : 'active' });
-    if (isSuccess) {
+  const syncLiveAchievement = (completedText, nextText) => {
+    const successPayload = { text: completedText, state: 'success', id: Date.now() };
+    setAchievementPopup(successPayload);
+    if (db && roomCode) {
+      update(ref(db, `rooms/${roomCode}`), { achievement: successPayload });
+    }
+
+    if (nextText) {
       setTimeout(() => {
-        setAchievementPopup(null);
+        const nextPayload = { text: nextText, state: 'active', id: Date.now() };
+        setAchievementPopup(nextPayload);
+        if (db && roomCode) {
+          update(ref(db, `rooms/${roomCode}`), { achievement: nextPayload });
+        }
       }, 1500);
     }
   };
@@ -132,7 +140,6 @@ export default function App() {
     let nextX = posRef.current.x + dx;
     let nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
 
-    // Strict barrier: Prep side (left) cannot exceed x=46, Cook side (right) cannot go below x=54
     if (roleRef.current === 'prep') {
       nextX = Math.max(6, Math.min(46, nextX));
     } else {
@@ -149,7 +156,6 @@ export default function App() {
     if (gameState !== 'playing' || isHost || pausedTimer) return;
     const { x, y } = posRef.current;
 
-    // Pick the closest station within reach (gives pass_counter generous reach across barrier)
     const nearby = STATIONS
       .map(s => ({ ...s, dist: Math.hypot(s.x - x, s.y - y) }))
       .filter(s => s.dist < (s.type === 'pass' ? 22 : 16))
@@ -205,9 +211,10 @@ export default function App() {
         setScore(newScore);
         setMyContributions(newContrib);
         
-        updateAchievement(`✅ Prendre ${item} (+5 pts)`, true);
-        setTimeout(() => updateAchievement(`Aller découper sur la planche 🔪`), 1600);
-        setRecipeStep(2);
+        syncLiveAchievement(
+          `✅ Ingrédient ${item} pris (+5 pts)`,
+          `Chef Gauche : Découper sur la planche 🔪`
+        );
 
         addLog(`${playerEmoji} ${playerName} a pris ${item} (+5 pts)`);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
@@ -245,7 +252,7 @@ export default function App() {
         });
       }
     } 
-    // 3. Stoves / Pots (Cook side)
+    // 3. Stoves / Pots (Cook side - Validates exact correct pot dynamically)
     else if (nearby.type === 'stove') {
       if (roleRef.current !== 'cook') {
         addLog(`⚠️ La cuisson est réservée au Chef Droit !`);
@@ -260,7 +267,12 @@ export default function App() {
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem === activeTicket.requiredPrep && !stState.progress && !stState.readyItem) {
         if (nearby.itemType !== activeTicket.requiredPot) {
-          addLog(`❌ Ce n'est pas le bon ustensile ! Il faut utiliser ${activeTicket.requiredPot === 'tagine' ? 'le Tagine 🍲' : 'la Théière 🫖'}`);
+          const penaltyScore = Math.max(0, scoreRef.current - 5);
+          setScore(penaltyScore);
+          scoreRef.current = penaltyScore;
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
+          addLog(`❌ MAUVAIS USTENSILE ! Ce plat ne va pas dans ${nearby.label} (-5 pts)`);
+          syncLiveAchievement(`❌ Mauvais ustensile ! (-5 pts)`, `Chef Droit : Utiliser le bon pot 🍲 / 🫖`);
           return;
         }
         const itemToCook = currentItem;
@@ -277,7 +289,7 @@ export default function App() {
         });
       }
     }
-    // 4. Central Pass Counter (Barrier bridge - works from both sides!)
+    // 4. Central Pass Counter (Barrier bridge)
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
@@ -285,9 +297,11 @@ export default function App() {
         setHeldItem(picked);
         syncStationUpdate(nearby.id, { ...stState, readyItem: null });
         
-        updateAchievement(`✅ Récupérer du Passe-Plats (+5 pts)`, true);
-        setTimeout(() => updateAchievement(`Cuire au pot 🍲 / 🫖`), 1600);
-        setRecipeStep(4);
+        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
+        syncLiveAchievement(
+          `✅ Récupéré du Passe-Plats (+5 pts)`,
+          `Chef Droit : Cuire dans ${correctPotName} 🔥`
+        );
 
         addLog(`🪟 ${playerName} a pris ${picked} du passe-plats.`);
         syncMyState(posRef.current, picked, contribRef.current);
@@ -296,8 +310,13 @@ export default function App() {
         heldRef.current = '';
         setHeldItem('');
         syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
-        updateAchievement(`✅ Posé sur le Passe-Plats 🪟`, true);
-        setTimeout(() => updateAchievement(`Chef Droit : Récupérer & Cuire 🍲`), 1600);
+        
+        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
+        syncLiveAchievement(
+          `✅ Posé sur le Passe-Plats 🪟`,
+          `Chef Droit : Cuire dans ${correctPotName} 🔥`
+        );
+
         addLog(`🪟 ${playerName} a passé ${dropped} de l'autre côté !`);
         syncMyState(posRef.current, '', contribRef.current);
       }
@@ -319,16 +338,22 @@ export default function App() {
         setScore(newScore);
         setMyContributions(newContrib);
 
-        updateAchievement(`✅ Servir le plat (+5 pts)`, true);
+        syncLiveAchievement(`✅ Plat servi avec succès (+${pts + 5} pts)`, null);
         addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts + 5} pts) 🛎️`);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
-        syncMyState(posRef.current, '', contribRef.current);
-
-        setPausedTimer(true);
-        setCongratsModal({
+        
+        const modalData = {
           title: activeTicket.title,
           earnedPts: pts + 5
-        });
+        };
+
+        if (db && roomCode) {
+          update(ref(db, `rooms/${roomCode}`), { 
+            score: newScore,
+            congratsModal: modalData,
+            pausedTimer: true
+          });
+        }
+        syncMyState(posRef.current, '', contribRef.current);
       } else {
         const penaltyScore = Math.max(0, scoreRef.current - 5);
         setScore(penaltyScore);
@@ -374,9 +399,10 @@ export default function App() {
       setScore(newScore);
       setMyContributions(newContrib);
 
-      updateAchievement(`✅ Cuisson réussie (+5 pts)`, true);
-      setTimeout(() => updateAchievement(`Apporter au Comptoir 🛎️`), 1600);
-      setRecipeStep(5);
+      syncLiveAchievement(
+        `✅ Cuisson réussie (+5 pts)`,
+        `Chef Droit : Apporter au Comptoir 🛎️`
+      );
 
       addLog(`🔥 Cuisson réussie (+5 pts) ➔ ${result}`);
       if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
@@ -407,9 +433,10 @@ export default function App() {
       setScore(newScore);
       setMyContributions(newContrib);
 
-      updateAchievement(`✅ Découpe réussie (+5 pts)`, true);
-      setTimeout(() => updateAchievement(`Mettre sur le Passe-Plats 🪟`), 1600);
-      setRecipeStep(3);
+      syncLiveAchievement(
+        `✅ Découpe réussie (+5 pts)`,
+        `Chef Gauche : Mettre sur le Passe-Plats 🪟`
+      );
 
       addLog(`🔪 Découpe réussie (+5 pts) ➔ ${result}`);
       if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
@@ -434,21 +461,33 @@ export default function App() {
     return () => clearInterval(fireInterval);
   }, [gameState, isHost, stationStates]);
 
+  const advanceNextRecipe = () => {
+    const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
+    const initialAch = { text: `Chef Gauche : Prendre ${nextRecipe.requiredItem}`, state: 'active', id: Date.now() };
+    setActiveTicket(nextRecipe);
+    setAchievementPopup(initialAch);
+    setCongratsModal(null);
+    setPausedTimer(false);
+    if (db && roomCode) {
+      update(ref(db, `rooms/${roomCode}`), {
+        activeTicket: nextRecipe,
+        achievement: initialAch,
+        congratsModal: null,
+        pausedTimer: false
+      });
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (gameState !== 'playing' || isHost || pausedTimer) return;
-      const step = 4;
+      if (gameState !== 'playing' || isHost) return;
       if (congratsModal && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
-        const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
-        setActiveTicket(nextRecipe);
-        setRecipeStep(1);
-        updateAchievement(`Prendre ${nextRecipe.requiredItem}`);
-        setCongratsModal(null);
-        setPausedTimer(false);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
+        advanceNextRecipe();
         return;
       }
+      if (pausedTimer) return;
+      const step = 4;
       if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
         handleMinigameTap();
@@ -485,6 +524,9 @@ export default function App() {
         setPlayers(data.players || {});
         setStationStates(data.stations || {});
         if (data.activeTicket) setActiveTicket(data.activeTicket);
+        if (data.achievement !== undefined) setAchievementPopup(data.achievement);
+        setCongratsModal(data.congratsModal || null);
+        setPausedTimer(!!data.pausedTimer);
         if (data.countdown !== undefined) setCountdown(data.countdown);
         if (data.endTime !== undefined) setEndTime(data.endTime);
         if (data.logs) setLogs(data.logs);
@@ -545,8 +587,8 @@ export default function App() {
 
     setMyContributions(0);
     contribRef.current = 0;
-    setRecipeStep(1);
-    setAchievementPopup({ text: 'Prendre la Tomate 🍅', state: 'active' });
+    const startAch = { text: 'Chef Gauche : Prendre 🍅', state: 'active', id: Date.now() };
+    setAchievementPopup(startAch);
 
     if (db && roomCode) {
       update(ref(db, `rooms/${roomCode}`), {
@@ -554,7 +596,10 @@ export default function App() {
         countdown: 3,
         score: 0,
         stations: {},
-        activeTicket: RECIPES[0]
+        activeTicket: RECIPES[0],
+        achievement: startAch,
+        congratsModal: null,
+        pausedTimer: false
       });
     }
 
@@ -710,7 +755,7 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.9 🌶️</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v4.1 🌶️</h1>
             <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
@@ -851,7 +896,6 @@ export default function App() {
       {/* ACTIVE GAMEPLAY SCREEN */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
-          {/* Independent 3-column grid header so timer digit width never shifts center or right elements */}
           <header style={styles.header}>
             <div style={{ justifySelf: 'start' }}>
               <div style={styles.timerBox}>
@@ -873,9 +917,9 @@ export default function App() {
             <div style={styles.kitchenFloor}>
               <div style={styles.barrierLine}></div>
 
-              {/* Achievement Notification Overlay on top (Centered) */}
+              {/* Synchronized Live Instruction Banner */}
               {achievementPopup && (
-                <div className="achievement-card" style={{
+                <div key={achievementPopup.id || achievementPopup.text} className="achievement-card" style={{
                   ...styles.achievementBanner,
                   background: achievementPopup.state === 'success' ? 'rgba(16, 185, 129, 0.95)' : 'rgba(30, 27, 75, 0.95)',
                   borderColor: achievementPopup.state === 'success' ? '#34d399' : '#fbbf24'
@@ -963,15 +1007,7 @@ export default function App() {
                     Le minuteur est en pause. Appuyez sur Espace ou Continuer pour lancer la suite.
                   </div>
                 </div>
-                <button onClick={() => {
-                  const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
-                  setActiveTicket(nextRecipe);
-                  setRecipeStep(1);
-                  updateAchievement(`Prendre ${nextRecipe.requiredItem}`);
-                  setCongratsModal(null);
-                  setPausedTimer(false);
-                  if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { activeTicket: nextRecipe });
-                }} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
+                <button onClick={advanceNextRecipe} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
                   CONTINUER AVEC VOTRE PROCHAIN REPAS 🚀 (ESPACE)
                 </button>
               </div>
