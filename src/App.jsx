@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v6.5";
+const APP_VERSION = "v6.6";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -25,7 +25,7 @@ const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', 
 const INGREDIENT_TYPES = ['🍅', '🥩', '🧄', '🌶️', '🫖', '🥖', '🧀', '🍄', '🍋'];
 
 const WORLD_WIDTH = 2400;
-const GROUND_HEIGHT = 80;
+const GROUND_HEIGHT = 28; // Slimmed down ground
 const HITBOX_HALF_W = 16;
 
 const PLATFORM_LAYOUT = [
@@ -102,7 +102,7 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting');
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.5 Prêt']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron 2.5D v6.6 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [viewport, setViewport] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -461,9 +461,8 @@ export default function App() {
 
   const floorY = viewport.h - GROUND_HEIGHT;
   const zoom = 1.35;
-  // Properly center camera horizontally and vertically around the player
   const cameraX = Math.max(0, Math.min(WORLD_WIDTH - viewport.w / zoom, pos.x - (viewport.w / zoom) / 2));
-  const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 40));
+  const cameraY = Math.max(0, Math.min(viewport.h, pos.y - (viewport.h / zoom) / 2 - 60));
 
   return (
     <div style={styles.appContainer}>
@@ -745,7 +744,7 @@ const styles = {
   worldLayer: { position: 'absolute', top: 0, left: 0, height: '100vh' },
   cloud: { position: 'absolute', fontSize: '4.5rem', opacity: 0.9, pointerEvents: 'none' },
   platform: { position: 'absolute', background: '#22c55e', border: '3px solid #15803d', borderRadius: '10px', boxShadow: '0 8px 16px rgba(0,0,0,0.25)' },
-  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 16px, #78350f 16px, #78350f 32px)', borderTop: '8px solid #22c55e' },
+  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '28px', background: 'repeating-linear-gradient(45deg, #451a03, #451a03 12px, #78350f 12px, #78350f 24px)', borderTop: '4px solid #22c55e' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 20 },
   tag: { background: 'rgba(15, 23, 42, 0.85)', padding: '3px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: '800', whiteSpace: 'nowrap', marginBottom: '4px' },
   holdingIndicator: { background: 'rgba(16, 185, 129, 0.9)', color: '#fff', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '900', marginBottom: '2px', boxShadow: '0 3px 6px rgba(0,0,0,0.3)' },
