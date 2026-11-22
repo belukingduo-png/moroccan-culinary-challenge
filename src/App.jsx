@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, push } from 'firebase/database';
 
-const APP_VERSION = "v3.0";
+const APP_VERSION = "v3.3";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,7 +16,6 @@ try {
   console.warn("Firebase error:", e);
 }
 
-// Stations Setup including Central Pass-Through, Prep Boards, Cook Stoves, and Fire Extinguisher
 const STATIONS = [
   { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 20, color: '#ef4444' },
   { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 40, color: '#f97316' },
@@ -34,14 +33,9 @@ const STATIONS = [
   { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981' },
 ];
 
-const EMOJIS = [
-  '🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', 
-  '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'
-];
-
+const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'];
 const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
 
-// Dynamic Moroccan Recipes with multi-step pipelines
 const RECIPES = [
   { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredPrep: "🥗", requiredCook: "🍲", points: 15 },
   { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredPrep: "🍖", requiredCook: "🍲", points: 20 },
@@ -60,9 +54,9 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(3);
   const [endTime, setEndTime] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(120); // Extended to 2 minutes
+  const [timeLeft, setTimeLeft] = useState(120);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Prête (v3.0)']);
+  const [logs, setLogs] = useState(['🔥 Cuisine Prête (v3.3)']);
   const [leaderboard, setLeaderboard] = useState([]);
   const [myId] = useState(() => 'chef_' + Math.random().toString(36).substring(2, 7));
 
@@ -70,12 +64,10 @@ export default function App() {
   const [heldItem, setHeldItem] = useState('');
   const [myContributions, setMyContributions] = useState(0);
 
-  // Active Orders Ticket Queue
   const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
-
-  // Station specific state: { [stationId]: { progress, label, currentItem, readyItem, activeGame, fire } }
   const [stationStates, setStationStates] = useState({});
-  const [minigameData, setMinigameData] = useState(null); // { stationId, targetKey, prompt }
+  const [minigameData, setMinigameData] = useState(null);
+  const [tempMinigame, setTempMinigame] = useState(null);
 
   const posRef = useRef({ x: 50, y: 50 });
   const heldRef = useRef('');
@@ -98,6 +90,13 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const syncStationUpdate = (stationId, newStationData) => {
+    setStationStates(prev => ({ ...prev, [stationId]: newStationData }));
+    if (db && roomCode) {
+      set(ref(db, `rooms/${roomCode}/stations/${stationId}`), newStationData);
+    }
+  };
+
   const syncMyState = (newPos, newItem, newContrib) => {
     if (db && roomCode && !isHost) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
@@ -110,7 +109,7 @@ export default function App() {
   };
 
   const movePlayer = (dx, dy) => {
-    if (gameState !== 'playing' || isHost || minigameData) return;
+    if (gameState !== 'playing' || isHost || minigameData || tempMinigame) return;
     const nextX = Math.max(6, Math.min(95, posRef.current.x + dx));
     const nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
     const updated = { x: nextX, y: nextY };
@@ -128,15 +127,16 @@ export default function App() {
     let currentItem = heldRef.current;
     const stState = stationStates[nearby.id] || {};
 
-    // 0. Grease Fire Extinguishing
+    // Handle Fire extinguishing
     if (stState.fire) {
       if (currentItem === '🧯' || nearby.type === 'extinguisher') {
-        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], fire: false, progress: 0 } }));
-        addLog(`🧯 ${playerName} a éteint le feu de cuisine avec succès !`);
+        syncStationUpdate(nearby.id, { ...stState, fire: false, progress: 0 });
+        addLog(`🧯 ${playerName} a éteint le feu sur ${nearby.label} !`);
       } else if (nearby.type === 'extinguisher' && currentItem === '') {
         heldRef.current = '🧯';
         setHeldItem('🧯');
         addLog(`🧯 ${playerName} a pris l'extincteur !`);
+        syncMyState(posRef.current, '🧯', contribRef.current);
       }
       return;
     }
@@ -156,7 +156,7 @@ export default function App() {
       return;
     }
 
-    // 1. Crate: Take raw ingredient
+    // 1. Crate: Take ingredient
     if (nearby.type === 'crate' && currentItem === '') {
       const item = nearby.item;
       heldRef.current = item;
@@ -164,25 +164,28 @@ export default function App() {
       addLog(`${playerEmoji} ${playerName} a pris ${item}`);
       syncMyState(posRef.current, item, contribRef.current);
     } 
-    // 2. Prep Cutting Board (Interactive Rhythm Chopping Mini-Game)
+    // 2. Prep Cutting Board (Enforce alternate board if busy)
     else if (nearby.type === 'board') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
-        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
+        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
         addLog(`${playerEmoji} ${playerName} a récupéré ${picked} préparé`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
+        if (stState.currentItem) {
+          addLog(`⚠️ Ce poste de découpe est occupé ! Utilisez l'autre.`);
+          return;
+        }
         const itemToPrep = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
+        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToPrep });
 
-        // Trigger Interactive Rhythm Chopping Mini-Game
         setMinigameData({
           stationId: nearby.id,
-          type: 'chopping',
           targetTaps: 5,
           currentTaps: 0,
           item: itemToPrep,
@@ -190,44 +193,53 @@ export default function App() {
         });
       }
     } 
-    // 3. Cook Stoves / Tagines (Interactive Heat & Simmer Control)
+    // 3. Stoves / Tagines (Enforce alternate stove if busy)
     else if (nearby.type === 'stove') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
-        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
-        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} du tagine 🔥`);
+        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
+        addLog(`${playerEmoji} ${playerName} a récupéré ${picked} cuit du tagine 🔥`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem !== '' && !stState.progress && !stState.readyItem && currentItem !== '🧯') {
+        if (stState.currentItem) {
+          addLog(`⚠️ Ce tagine est déjà en cuisson ! Utilisez l'autre.`);
+          return;
+        }
         const itemToCook = currentItem;
         heldRef.current = '';
         setHeldItem('');
         syncMyState(posRef.current, '', contribRef.current);
+        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToCook });
 
-        // Start Cooking Timer with active heat balance
-        startCookingAction(nearby.id, 4000, itemToCook);
+        setTempMinigame({
+          stationId: nearby.id,
+          item: itemToCook,
+          sliderPos: 0,
+          direction: 2
+        });
       }
     }
-    // 4. Central Pass-Through Counter (Drop or swap prep/cook items between stations)
+    // 4. Central Pass-Through Counter
     else if (nearby.type === 'pass') {
       if (stState.readyItem && currentItem === '') {
         const picked = stState.readyItem;
         heldRef.current = picked;
         setHeldItem(picked);
-        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: null } }));
-        addLog(`🪟 ${playerName} a pris un plat du passe-plats central.`);
+        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
+        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats.`);
         syncMyState(posRef.current, picked, contribRef.current);
       } else if (currentItem !== '' && !stState.readyItem) {
         const dropped = currentItem;
         heldRef.current = '';
         setHeldItem('');
-        setStationStates(prev => ({ ...prev, [nearby.id]: { ...prev[nearby.id], readyItem: dropped } }));
-        addLog(`🪟 ${playerName} a déposé ${dropped} sur le passe-plats central.`);
+        syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
+        addLog(`🪟 ${playerName} a déposé ${dropped} sur le passe-plats.`);
         syncMyState(posRef.current, '', contribRef.current);
       }
     }
-    // 5. Serving Counter (Deliver ticket order)
+    // 5. Serving Counter
     else if (nearby.type === 'serve') {
       if (currentItem === activeTicket.requiredCook || currentItem === '🍲' || currentItem === '🫖') {
         heldRef.current = '';
@@ -240,11 +252,10 @@ export default function App() {
         setScore(newScore);
         addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts} pts) 🛎️`);
         
-        // Rotate to next dynamic recipe ticket
         const nextRecipe = RECIPES[Math.floor(Math.random() * RECIPES.length)];
         setActiveTicket(nextRecipe);
 
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore, activeTicketTitle: nextRecipe.title });
+        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore, activeTicket: nextRecipe });
         syncMyState(posRef.current, '', contribRef.current);
       } else {
         const penaltyScore = Math.max(0, scoreRef.current - 5);
@@ -256,49 +267,54 @@ export default function App() {
     }
   };
 
-  const startCookingAction = (stationId, duration, rawItem) => {
-    const intervalTime = 50;
-    const steps = duration / intervalTime;
-    let currentStep = 0;
+  // Temperature Slider Minigame Loop
+  useEffect(() => {
+    if (!tempMinigame) return;
+    const interval = setInterval(() => {
+      setTempMinigame(prev => {
+        if (!prev) return null;
+        let nextPos = prev.sliderPos + prev.direction;
+        let nextDir = prev.direction;
+        if (nextPos >= 100 || nextPos <= 0) {
+          nextDir = -nextDir;
+        }
+        return { ...prev, sliderPos: nextPos, direction: nextDir };
+      });
+    }, 25);
+    return () => clearInterval(interval);
+  }, [tempMinigame]);
 
-    setStationStates(prev => ({
-      ...prev,
-      [stationId]: { progress: 0, label: '🔥 Cuisson...', currentItem: rawItem, readyItem: null }
-    }));
+  const handleTempSubmit = () => {
+    if (!tempMinigame) return;
+    const pos = tempMinigame.sliderPos;
+    const stationId = tempMinigame.stationId;
+    const item = tempMinigame.item;
 
-    const timer = setInterval(() => {
-      currentStep += 1;
-      const progress = (currentStep / steps) * 100;
+    const isSuccess = pos >= 40 && pos <= 65;
 
-      setStationStates(prev => ({
-        ...prev,
-        [stationId]: { ...prev[stationId], progress }
-      }));
-
-      if (currentStep >= steps) {
-        clearInterval(timer);
-        const result = rawItem === '🌿' ? '🫖' : '🍲';
-        setStationStates(prev => ({
-          ...prev,
-          [stationId]: { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result }
-        }));
-      }
-    }, intervalTime);
+    if (isSuccess) {
+      const result = item === '🌿' ? '🫖' : '🍲';
+      syncStationUpdate(stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
+      addLog(`🔥 Cuisson parfaite au tagine ! Résultat ➔ ${result}`);
+    } else {
+      syncStationUpdate(stationId, { progress: 0, label: '', currentItem: null, readyItem: null, fire: false });
+      const penaltyScore = Math.max(0, scoreRef.current - 5);
+      setScore(penaltyScore);
+      scoreRef.current = penaltyScore;
+      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
+      addLog(`❌ CUISSON RATÉE ! Température incorrecte (-5 pts)`);
+    }
+    setTempMinigame(null);
   };
 
-  // Handle Rhythm Chopping Interaction
   const handleMinigameTap = () => {
     if (!minigameData) return;
     const updatedTaps = minigameData.currentTaps + 1;
     if (updatedTaps >= minigameData.targetTaps) {
-      // Completed chopping successfully
       const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🧄': '🥗', '🌿': '🌿' };
       const result = choppedMap[minigameData.item] || '🥗';
       
-      setStationStates(prev => ({
-        ...prev,
-        [minigameData.stationId]: { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result }
-      }));
+      syncStationUpdate(minigameData.stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false });
       addLog(`🔪 Découpe réussie ! Ingrédient préparé ➔ ${result}`);
       setMinigameData(null);
     } else {
@@ -306,23 +322,22 @@ export default function App() {
     }
   };
 
-  // Random Kitchen Grease Fire generator
+  // Independent Grease Fire Generator for any stove station
   useEffect(() => {
-    if (gameState !== 'playing' || isHost) return;
+    if (gameState !== 'playing' || !isHost) return;
     const fireInterval = setInterval(() => {
-      if (Math.random() < 0.25) { // 25% chance every 12s
-        const stoveStations = STATIONS.filter(s => s.type === 'stove');
-        const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
-        
-        setStationStates(prev => ({
-          ...prev,
-          [randomStove.id]: { ...prev[randomStove.id], fire: true, label: '🔥 FEU DE CUISINE !' }
-        }));
-        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Utilisez l'extincteur (🧯) !`);
+      const stoveStations = STATIONS.filter(s => s.type === 'stove');
+      const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
+      
+      // Fetch latest station state from database or local state
+      const currentSt = stationStates[randomStove.id] || {};
+      if (!currentSt.fire && Math.random() < 0.3) {
+        syncStationUpdate(randomStove.id, { ...currentSt, fire: true, label: '🔥 FEU !' });
+        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Éteignez-le vite (🧯) !`);
       }
     }, 12000);
     return () => clearInterval(fireInterval);
-  }, [gameState, isHost]);
+  }, [gameState, isHost, stationStates]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -331,6 +346,11 @@ export default function App() {
       if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
         e.preventDefault();
         handleMinigameTap();
+        return;
+      }
+      if (tempMinigame && (e.key === ' ' || e.key === 'Enter')) {
+        e.preventDefault();
+        handleTempSubmit();
         return;
       }
       if (['w', 'W', 'ArrowUp'].includes(e.key)) movePlayer(0, -step);
@@ -344,7 +364,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, minigameData]);
+  }, [gameState, isHost, minigameData, tempMinigame, stationStates]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -357,6 +377,8 @@ export default function App() {
         setScore(currentScore);
         scoreRef.current = currentScore;
         setPlayers(data.players || {});
+        setStationStates(data.stations || {});
+        if (data.activeTicket) setActiveTicket(data.activeTicket);
         if (data.countdown !== undefined) setCountdown(data.countdown);
         if (data.endTime !== undefined) setEndTime(data.endTime);
         if (data.logs) setLogs(data.logs);
@@ -419,7 +441,13 @@ export default function App() {
     contribRef.current = 0;
 
     if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), { status: 'countdown', countdown: 3, score: 0 });
+      update(ref(db, `rooms/${roomCode}`), {
+        status: 'countdown',
+        countdown: 3,
+        score: 0,
+        stations: {},
+        activeTicket: RECIPES[0]
+      });
     }
 
     let count = 3;
@@ -429,7 +457,7 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { countdown: count });
       } else {
         clearInterval(cdInterval);
-        const targetEnd = Date.now() + 120000; // 120s shift length
+        const targetEnd = Date.now() + 120000;
         if (db && roomCode) {
           update(ref(db, `rooms/${roomCode}`), { status: 'playing', countdown: 0, endTime: targetEnd });
         }
@@ -452,7 +480,8 @@ export default function App() {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         score: 0,
-        logs: [`👑 ${playerName} a ouvert la cuisine co-op ${code}`]
+        stations: {},
+        logs: [`👑 ${playerName} a ouvert la cuisine ${code}`]
       });
     }
   };
@@ -498,7 +527,7 @@ export default function App() {
         }
         @keyframes fireAlarm {
           0% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.1); filter: brightness(1.5) drop-shadow(0 0 10px #ef4444); }
+          50% { transform: scale(1.12); filter: brightness(1.6) drop-shadow(0 0 12px #ef4444); }
           100% { transform: scale(1); filter: brightness(1); }
         }
         @keyframes spin {
@@ -544,7 +573,7 @@ export default function App() {
         <div key="profile" className="screen-anim" style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.0 🌶️</h1>
+            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron v3.3 🌶️</h1>
             <p style={styles.subSubtitle}>🧑‍🍳 Identité du Chef Co-op</p>
             <form onSubmit={handleProfileSubmit} style={styles.form}>
               <input
@@ -666,7 +695,19 @@ export default function App() {
             <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
             <h2 style={{ margin: '12px 0', fontSize: '1.6rem' }}>{playerEmoji} {playerName}</h2>
             <div style={styles.spinner}></div>
-            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal pour démarrer (120s)...</p>
+            <p style={{ marginTop: '15px', color: '#cbd5e1', fontWeight: '600' }}>⏳ En attente du Chef Principal...</p>
+            
+            {/* Step by Step Guide for Players */}
+            <div style={styles.instructionsBox}>
+              <h4 style={{ color: '#fbbf24', margin: '0 0 8px 0', fontSize: '0.95rem' }}>📖 Comment Jouer (Instructions) :</h4>
+              <ol style={{ textAlign: 'left', fontSize: '0.8rem', color: '#cbd5e1', paddingLeft: '18px', margin: 0, lineHeight: '1.5' }}>
+                <li><strong>Prendre l'ingrédient :</strong> Allez aux caisses à gauche (🍅, 🍗, etc.) et appuyez sur ⚡.</li>
+                <li><strong>Préparer :</strong> Apportez l'ingrédient à un poste de découpe (🔪) libre et jouez au mini-jeu de rythme.</li>
+                <li><strong>Cuire :</strong> Apportez l'ingrédient préparé à un tagine (🍲 / 🫖) libre et validez la température dans la zone verte.</li>
+                <li><strong>Servir :</strong> Apportez le plat cuit au Comptoir de Service (🛎️) pour marquer des points !</li>
+                <li><strong>Urgence :</strong> Si un feu éclate (🔥), prenez l'extincteur (🧯) pour l'éteindre immédiatement.</li>
+              </ol>
+            </div>
           </div>
         </div>
       )}
@@ -679,7 +720,7 @@ export default function App() {
         </div>
       )}
 
-      {/* ACTIVE GAMEPLAY SCREEN (v3.0 Co-op) */}
+      {/* ACTIVE GAMEPLAY SCREEN */}
       {!isHost && gameState === 'playing' && (
         <div key="play" className="screen-anim" style={styles.gameContainer}>
           <header style={styles.header}>
@@ -689,7 +730,7 @@ export default function App() {
           </header>
 
           <div style={styles.activeLayout}>
-            {/* Dynamic Active Recipe Ticket Sidebar */}
+            {/* Ticket & Instructions Sidebar */}
             <div style={styles.recipeSidebar}>
               <h4 style={{ margin: '0 0 10px 0', color: '#fbbf24', fontSize: '0.95rem' }}>🎫 Ticket Actif :</h4>
               <div style={styles.recipeCardItem}>
@@ -700,9 +741,13 @@ export default function App() {
                   Récompense : <span style={{ color: '#34d399', fontWeight: 'bold' }}>+{activeTicket.points} pts</span>
                 </div>
               </div>
-              <h4 style={{ margin: '15px 0 8px 0', color: '#fbbf24', fontSize: '0.9rem' }}>📦 Caisses :</h4>
-              <div style={{ fontSize: '0.8rem', color: '#94a3b8', lineHeight: '1.5' }}>
-                🍅 Tomate | 🌶️ Piment<br/>🍗 Poulet | 🧄 Ail | 🌿 Menthe
+
+              <h4 style={{ margin: '15px 0 8px 0', color: '#fbbf24', fontSize: '0.9rem' }}>📖 Aide Rapide :</h4>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', lineHeight: '1.4' }}>
+                • 🍅 Tomate / 🍗 Poulet aux caisses.<br/>
+                • 🔪 Découpe 1 ou 2 (mini-jeu de rythme).<br/>
+                • 🍲 Tagine 1 ou 2 (contrôle température).<br/>
+                • 🧯 Éteignez les feux immédiatement !
               </div>
             </div>
 
@@ -721,7 +766,7 @@ export default function App() {
                       ...styles.station,
                       left: `${st.x}%`,
                       top: `${st.y}%`,
-                      background: st.color,
+                      background: hasFire ? '#991b1b' : st.color,
                       borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking ? '#fbbf24' : 'rgba(255,255,255,0.25)'))
                     }}
                   >
@@ -731,29 +776,19 @@ export default function App() {
                       </span>
                     </div>
 
-                    <span style={styles.stationLabel}>{hasFire ? 'FEU !' : st.label}</span>
+                    <span style={styles.stationLabel}>{hasFire ? 'FEU ! (🧯)' : st.label}</span>
 
-                    {stState.currentItem && (
+                    {stState.currentItem && !hasFire && (
                       <div style={styles.stationItemBadge}>{stState.currentItem}</div>
                     )}
 
-                    {isReady && (
+                    {isReady && !hasFire && (
                       <div style={styles.readyItemBadge}>{stState.readyItem} ✨</div>
-                    )}
-
-                    {isWorking && (
-                      <div style={styles.stationTimerBadge}>
-                        <div style={{ fontSize: '0.65rem', color: '#fbbf24', fontWeight: '700' }}>{stState.label}</div>
-                        <div style={styles.miniTrack}>
-                          <div style={{ ...styles.miniFill, width: `${stState.progress}%` }}></div>
-                        </div>
-                      </div>
                     )}
                   </div>
                 );
               })}
 
-              {/* Other Players in Room */}
               {Object.keys(players).map((pid) => {
                 const p = players[pid];
                 const isMe = pid === myId;
@@ -780,7 +815,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* Active Rhythm Chopping Minigame Modal Overlay */}
+          {/* Rhythm Chopping Minigame Modal */}
           {minigameData && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameCard}>
@@ -792,6 +827,25 @@ export default function App() {
                 </div>
                 <button onClick={handleMinigameTap} style={styles.tapActionBtn}>
                   TAP / ESPACE ({minigameData.currentTaps}/{minigameData.targetTaps}) 🔪
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Temperature Slider Cooking Minigame Modal */}
+          {tempMinigame && (
+            <div style={styles.minigameOverlay}>
+              <div style={styles.minigameCard}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#f59e0b' }}>🔥 Contrôle de Température Tagine !</h3>
+                <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '10px' }}>Appuyez quand l'indicateur est dans la zone verte !</p>
+                
+                <div style={styles.tempBarContainer}>
+                  <div style={styles.tempGreenZone}></div>
+                  <div style={{ ...styles.tempIndicator, left: `${tempMinigame.sliderPos}%` }}></div>
+                </div>
+
+                <button onClick={handleTempSubmit} style={{ ...styles.tapActionBtn, background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', marginTop: '20px' }}>
+                  🎯 VALIDER LA CUISSON (ESPACE)
                 </button>
               </div>
             </div>
@@ -847,10 +901,10 @@ const styles = {
   heroBadge: { background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fcd34d', padding: '5px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold', marginBottom: '10px' },
   mainGameTitle: { fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)', margin: '0 0 5px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 12px rgba(251, 191, 36, 0.3)' },
   subSubtitle: { fontSize: '1.35rem', color: '#cbd5e1', marginBottom: '25px', fontWeight: '700', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '45px 40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '620px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
-  lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '40px 35px', borderRadius: '26px', textAlign: 'center', width: '100%', maxWidth: '480px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
+  menuBox: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '35px 30px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '620px', boxSizing: 'border-box', zIndex: 2, boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
+  lobbyCard: { background: 'rgba(30, 27, 75, 0.85)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '30px', borderRadius: '26px', textAlign: 'center', width: '100%', maxWidth: '500px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
+  instructionsBox: { marginTop: '15px', background: 'rgba(15, 23, 42, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)' },
   resultsCard: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(14px)', border: '1px solid rgba(255, 255, 255, 0.12)', padding: '35px', borderRadius: '26px', textAlign: 'center', width: '100%', maxWidth: '500px', boxSizing: 'border-box', boxShadow: '0 30px 60px rgba(0,0,0,0.6)' },
-  
   hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', boxSizing: 'border-box', background: 'rgba(15, 23, 42, 0.6)' },
   hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 25px', background: 'rgba(30, 27, 75, 0.85)', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.1)' },
   hostMainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', margin: '20px 0', minHeight: 0 },
@@ -860,55 +914,45 @@ const styles = {
   logsBox: { flex: 1, overflowY: 'auto', background: 'rgba(15, 23, 42, 0.6)', padding: '12px', borderRadius: '10px' },
   logLine: { fontSize: '0.95rem', marginBottom: '6px', lineHeight: '1.4' },
   copyBtn: { background: 'rgba(99, 102, 241, 0.25)', border: '1px solid #6366f1', color: '#fff', padding: '8px 12px', borderRadius: '10px', cursor: 'pointer', fontSize: '1.1rem' },
-
   codeBadge: { background: '#4338ca', padding: '8px 16px', borderRadius: '10px', fontSize: '1.2rem', letterSpacing: '2px', border: '1px solid #6366f1', fontWeight: '700' },
   playerList: { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', flex: 1 },
   playerItem: { background: 'rgba(15, 23, 42, 0.6)', padding: '12px 16px', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.05)' },
   lbBox: { maxHeight: '140px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.6)', borderRadius: '10px', padding: '8px', border: '1px solid rgba(255,255,255,0.1)' },
   lbItem: { display: 'flex', justifyContent: 'space-between', padding: '6px 10px', borderRadius: '6px', fontSize: '0.9rem', marginBottom: '4px' },
-  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', margin: '20px 0' },
-  emojiBtn: { fontSize: '1.6rem', padding: '12px', borderRadius: '14px', border: '1px solid', cursor: 'pointer' },
+  emojiGrid: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '10px', margin: '15px 0' },
+  emojiBtn: { fontSize: '1.6rem', padding: '10px', borderRadius: '14px', border: '1px solid', cursor: 'pointer' },
   primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.15rem', borderRadius: '14px', cursor: 'pointer', fontWeight: 'bold' },
   secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.15rem', borderRadius: '14px', cursor: 'pointer', fontWeight: 'bold' },
-  divider: { margin: '20px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' },
+  divider: { margin: '15px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.1)' },
   dividerText: { position: 'absolute', top: '-9px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 8px', fontSize: '0.75rem', color: '#94a3b8' },
-  form: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  input: { width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1.1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
-  spinner: { width: '36px', height: '36px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
+  form: { display: 'flex', flexDirection: 'column', gap: '14px' },
+  input: { width: '100%', padding: '14px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1.1rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.6)', color: '#fff', boxSizing: 'border-box' },
+  spinner: { width: '32px', height: '32px', border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid #10b981', borderRadius: '50%', animation: 'spin 1.2s linear infinite', margin: '0 auto' },
   countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
   countdownText: { fontSize: '5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 40px rgba(251, 191, 36, 0.6)', textAlign: 'center' },
-  
   gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16', boxSizing: 'border-box' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 20px', background: '#111827', borderBottom: '1px solid #1f2937' },
   headerItem: { background: '#1f2937', padding: '6px 14px', borderRadius: '10px', fontSize: '1rem', fontWeight: '600' },
   scoreBoard: { fontSize: '1.3rem', color: '#38bdf8', fontWeight: '800', background: 'rgba(56, 189, 248, 0.15)', padding: '8px 18px', borderRadius: '10px', border: '1px solid rgba(56, 189, 248, 0.3)' },
-  
   activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '10px', gap: '10px' },
-  recipeSidebar: { width: '240px', background: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '15px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' },
+  recipeSidebar: { width: '240px', background: '#111827', border: '1px solid #1f2937', borderRadius: '16px', padding: '15px', display: 'flex', flexDirection: 'column', boxSizing: 'border-box', overflowY: 'auto' },
   recipeCardItem: { background: 'rgba(30, 41, 59, 0.7)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.08)' },
-
   kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '16px', border: '2px dashed #334155', overflow: 'hidden' },
-  
   station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '82px', height: '82px', borderRadius: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 10px 25px rgba(0,0,0,0.5)', border: '2px solid rgba(255,255,255,0.25)' },
   stationLabel: { fontSize: '0.6rem', fontWeight: '700', color: '#fff', marginTop: '2px', textShadow: '0 1px 3px rgba(0,0,0,0.8)', textAlign: 'center' },
-  
   stationItemBadge: { position: 'absolute', top: '-14px', right: '-8px', background: '#334155', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', border: '2px solid #fbbf24', boxShadow: '0 2px 6px rgba(0,0,0,0.4)' },
   readyItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#10b981', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', border: '2px solid #fff', boxShadow: '0 0 12px rgba(16, 185, 129, 0.8)', animation: 'popScale 0.4s ease-out' },
-
-  stationTimerBadge: { position: 'absolute', bottom: '-26px', background: '#1e293b', padding: '3px 8px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.2)', width: '92px', textAlign: 'center', zIndex: 20 },
-  miniTrack: { width: '100%', height: '5px', background: '#0f172a', borderRadius: '3px', overflow: 'hidden', marginTop: '2px' },
-  miniFill: { height: '100%', background: 'linear-gradient(90deg, #f59e0b, #10b981)' },
-
   minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  minigameCard: { background: '#1e1b4b', border: '2px solid #fbbf24', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '360px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' },
+  minigameCard: { background: '#1e1b4b', border: '2px solid #fbbf24', padding: '30px', borderRadius: '24px', textAlign: 'center', width: '380px', boxShadow: '0 20px 40px rgba(0,0,0,0.8)' },
   miniTrackLarge: { width: '100%', height: '14px', background: '#0f172a', borderRadius: '7px', overflow: 'hidden', margin: '15px 0', border: '1px solid rgba(255,255,255,0.2)' },
   miniFillLarge: { height: '100%', background: 'linear-gradient(90deg, #3b82f6, #10b981)' },
   tapActionBtn: { width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none', padding: '14px', fontSize: '1.1rem', borderRadius: '12px', cursor: 'pointer', fontWeight: 'bold' },
-
+  tempBarContainer: { position: 'relative', width: '100%', height: '24px', background: '#0f172a', borderRadius: '12px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.2)', margin: '15px 0' },
+  tempGreenZone: { position: 'absolute', left: '40%', width: '25%', height: '100%', background: 'rgba(16, 185, 129, 0.4)', borderLeft: '2px solid #10b981', borderRight: '2px solid #10b981' },
+  tempIndicator: { position: 'absolute', top: 0, width: '6px', height: '100%', background: '#fff', transform: 'translateX(-50%)', boxShadow: '0 0 8px #fff' },
   playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.85)', padding: '6px 12px', borderRadius: '16px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
   heldBubble: { position: 'absolute', top: '-30px', background: '#fff', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', border: '2px solid #f59e0b' },
   playerTag: { fontSize: '0.8rem', fontWeight: '700', color: '#e2e8f0', whiteSpace: 'nowrap' },
-
   mobileControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 25px', background: '#111827', borderTop: '1px solid #1f2937' },
   dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 44px)', gridTemplateRows: 'repeat(2, 44px)', gap: '4px' },
   dpadBtn: { background: '#334155', border: 'none', borderRadius: '10px', fontSize: '1.2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
