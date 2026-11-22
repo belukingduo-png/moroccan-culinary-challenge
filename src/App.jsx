@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, onValue, update, push } from 'firebase/database';
+import { getDatabase, ref, set, get, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v4.6";
+const APP_VERSION = "v5.0";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -16,44 +16,21 @@ try {
   console.warn("Firebase error:", e);
 }
 
-const STATIONS = [
-  { id: 'crate_tomato', icon: '🍅', type: 'crate', item: '🍅', label: 'Caisse Tomate', x: 12, y: 25, color: '#ef4444', zone: 'prep' },
-  { id: 'crate_chili', icon: '🌶️', type: 'crate', item: '🌶️', label: 'Caisse Piment', x: 12, y: 48, color: '#f97316', zone: 'prep' },
-  { id: 'crate_chicken', icon: '🍗', type: 'crate', item: '🍗', label: 'Caisse Poulet', x: 12, y: 71, color: '#eab308', zone: 'prep' },
-  { id: 'crate_mint', icon: '🌿', type: 'crate', item: '🌿', label: 'Caisse Menthe', x: 12, y: 92, color: '#22c55e', zone: 'prep' },
-  { id: 'board_1', icon: '🔪', type: 'board', label: 'Poste Découpe', x: 32, y: 50, color: '#3b82f6', zone: 'prep' },
-  { id: 'pass_counter', icon: '🪟', type: 'pass', label: 'Passe-Plats Central', x: 50, y: 50, color: '#ec4899', zone: 'barrier' },
-  { id: 'stove_tagine', icon: '🍲', type: 'stove', itemType: 'tagine', label: 'Tagine Cuisson', x: 68, y: 35, color: '#f59e0b', zone: 'cook' },
-  { id: 'stove_tea', icon: '🫖', type: 'stove', itemType: 'tea', label: 'Theière', x: 68, y: 65, color: '#a855f7', zone: 'cook' },
-  { id: 'extinguisher', icon: '🧯', type: 'extinguisher', label: 'Extincteur', x: 88, y: 25, color: '#64748b', zone: 'cook' },
-  { id: 'serve', icon: '🛎️', type: 'serve', label: 'Comptoir Service', x: 88, y: 75, color: '#10b981', zone: 'cook' },
-];
-
-const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀', '🌶️', '🍅', '🍳', '🧄', '🥑', '🍋'];
+const EMOJIS = ['🧑‍🍳', '👩‍🍳', '👨‍🍳', '🦊', '🐼', '🐱', '🦁', '🐸', '🐯', '🥐', '🥖', '🧀'];
 
 const RANDOM_NAMES = [
-  "Chef Zellige", "SaffronMaster", "BaguetteBoss", "TajineKing", "MintTeaPro",
-  "CouscousChief", "HarissaHero", "OliveOven", "SpiceSamurai", "KitchenKnight",
-  "GourmetGuru", "PanPalette", "PepperPioneer", "BasilBaron", "SoupSultan",
-  "DoughDuke", "FlameFoodie", "GrillGuardian", "SizzleStar", "WokWizard",
-  "FeastFalcon", "BakeBandit", "CraveCaptain", "DishDragon", "FlavorPhoenix",
-  "MeltMaestro", "NoshNinja", "RecipeRider", "SnackSiren", "StewStryker",
-  "TacoTornado", "ZestZenith", "AppetiteAce", "BrothBoss", "CarbCommander",
-  "DineDynamo", "EaterEmperor", "ForkFighter", "GravyGiant", "HashHero",
-  "Ingrediator", "JusJuggernaut", "KneadKing", "LadleLord", "MunchMonarch",
-  "NourishNoble", "OvenOverlord", "PlatePrince", "QuesoQueen", "RouxRuler"
+  "PixelChef", "JumpMaster", "PlatformPro", "AirChef", "DashKing",
+  "SkySaffron", "BounceBoss", "CloudCuisine", "GravityGuru", "VelocityViking"
 ];
 
-const FALLING_EMOJIS_LIST = ['🍗', '🍅', '🌶️', '🍋', '🥖', '🧄', '🍳', '🫖'];
-
-const RECIPES = [
-  { id: 'mechouia', title: "Salade Mechouia 🌶️", requiredItem: '🍅', requiredPrep: '🥗', requiredPot: 'tagine', finalCook: '🍲', points: 15 },
-  { id: 'poulet_citron', title: "Tagine Poulet Citron 🍗", requiredItem: '🍗', requiredPrep: '🍖', requiredPot: 'tagine', finalCook: '🍲', points: 20 },
-  { id: 'the_menthe', title: "Thé à la Menthe Royale 🫖", requiredItem: '🌿', requiredPrep: '🌿', requiredPot: 'tea', finalCook: '🫖', points: 15 }
+const PLATFORMS = [
+  { x: 50, y: 320, w: 180, h: 24 },
+  { x: 300, y: 240, w: 200, h: 24 },
+  { x: 580, y: 320, w: 200, h: 24 }
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState('home'); 
+  const [screen, setScreen] = useState('home');
   const [playerName, setPlayerName] = useState('');
   const [playerEmoji, setPlayerEmoji] = useState('🧑‍🍳');
   const [roomCode, setRoomCode] = useState('');
@@ -62,42 +39,20 @@ export default function App() {
 
   const [players, setPlayers] = useState({});
   const [gameState, setGameState] = useState('waiting');
-  const [countdown, setCountdown] = useState(3);
-  const [endTime, setEndTime] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(120);
-  const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Cuisine Co-op v4.6 Prête']);
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [logs, setLogs] = useState(['🎮 2.5D Platformer v5.0 Prêt']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  const [myRole, setMyRole] = useState('prep');
-  const [pos, setPos] = useState({ x: 22, y: 50 });
-  const [heldItem, setHeldItem] = useState('');
-  const [myContributions, setMyContributions] = useState(0);
+  const [pos, setPos] = useState({ x: 100, y: 400 });
+  const [vel, setVel] = useState({ x: 0, y: 0 });
+  const [isGrounded, setIsGrounded] = useState(false);
+  const [jumpsLeft, setJumpsLeft] = useState(2);
+  const [facingRight, setFacingRight] = useState(true);
 
-  const [activeTicket, setActiveTicket] = useState(RECIPES[0]);
-  const [stationStates, setStationStates] = useState({});
-  const [minigameData, setMinigameData] = useState(null);
-  const [tempMinigame, setTempMinigame] = useState(null);
-  const [achievementPopup, setAchievementPopup] = useState(null);
-  const [congratsModal, setCongratsModal] = useState(null);
-  const [pausedTimer, setPausedTimer] = useState(false);
-
-  const posRef = useRef({ x: 22, y: 50 });
-  const heldRef = useRef('');
-  const contribRef = useRef(0);
-  const scoreRef = useRef(0);
-  const roleRef = useRef('prep');
-
-  const backgroundParticles = useMemo(() => {
-    return [...Array(18)].map((_, i) => ({
-      id: i,
-      emoji: FALLING_EMOJIS_LIST[i % FALLING_EMOJIS_LIST.length],
-      left: Math.random() * 100,
-      duration: 4 + Math.random() * 4,
-      delay: Math.random() * 4
-    }));
-  }, []);
+  const posRef = useRef({ x: 100, y: 400 });
+  const velRef = useRef({ x: 0, y: 0 });
+  const groundedRef = useRef(false);
+  const jumpsRef = useRef(2);
+  const keysPressed = useRef({});
 
   const copyRoomCode = () => {
     navigator.clipboard.writeText(roomCode);
@@ -105,448 +60,125 @@ export default function App() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const getRandomUniqueProfile = (existingPlayers = {}) => {
-    const usedNames = Object.values(existingPlayers).map(p => p.name);
-    const availableNames = RANDOM_NAMES.filter(n => !usedNames.includes(n));
-    const randomName = availableNames.length > 0 
-      ? availableNames[Math.floor(Math.random() * availableNames.length)] 
-      : "Chef " + Math.floor(Math.random() * 1000);
-    const randomEmoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-    return { name: randomName, emoji: randomEmoji };
+  const getRandomProfile = () => {
+    const name = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+    const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    return { name, emoji };
   };
 
-  const syncLiveAchievement = (completedText, nextText, isError = false) => {
-    const successPayload = { text: completedText, state: isError ? 'error' : 'success', id: Date.now() };
-    setAchievementPopup(successPayload);
-    if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), { achievement: successPayload });
-    }
-
-    if (nextText && !isError) {
-      setTimeout(() => {
-        const nextPayload = { text: nextText, state: 'active', id: Date.now() };
-        setAchievementPopup(nextPayload);
-        if (db && roomCode) {
-          update(ref(db, `rooms/${roomCode}`), { achievement: nextPayload });
-        }
-      }, 1500);
-    }
-  };
-
-  const syncStationUpdate = (stationId, newStationData) => {
-    setStationStates(prev => ({ ...prev, [stationId]: newStationData }));
-    if (db && roomCode) {
-      set(ref(db, `rooms/${roomCode}/stations/${stationId}`), newStationData);
-    }
-  };
-
-  const syncMyState = (newPos, newItem, newContrib) => {
+  const syncMyState = (newPos) => {
     if (db && roomCode && !isHost) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
         x: newPos.x,
         y: newPos.y,
-        item: newItem,
-        contributions: newContrib,
-        role: roleRef.current,
         name: playerName,
         emoji: playerEmoji
       });
     }
   };
 
-  const handleCustomizationChange = (newName, newEmoji) => {
-    setPlayerName(newName);
-    setPlayerEmoji(newEmoji);
-    if (db && roomCode && !isHost) {
-      update(ref(db, `rooms/${roomCode}/players/${myId}`), {
-        name: newName,
-        emoji: newEmoji
-      });
-    }
-  };
-
-  const movePlayer = (dx, dy) => {
-    if (gameState !== 'playing' || isHost || minigameData || tempMinigame || congratsModal || pausedTimer) return;
-    
-    let nextX = posRef.current.x + dx;
-    let nextY = Math.max(12, Math.min(92, posRef.current.y + dy));
-
-    if (roleRef.current === 'prep') {
-      nextX = Math.max(6, Math.min(46, nextX));
-    } else {
-      nextX = Math.max(54, Math.min(95, nextX));
-    }
-
-    const updated = { x: nextX, y: nextY };
-    posRef.current = updated;
-    setPos(updated);
-    syncMyState(updated, heldRef.current, contribRef.current);
-  };
-
-  const interactStation = () => {
-    if (gameState !== 'playing' || isHost || pausedTimer) return;
-    const { x, y } = posRef.current;
-
-    const nearby = STATIONS
-      .map(s => ({ ...s, dist: Math.hypot(s.x - x, s.y - y) }))
-      .filter(s => s.dist < (s.type === 'pass' ? 22 : 16))
-      .sort((a, b) => a.dist - b.dist)[0];
-
-    if (!nearby) return;
-
-    let currentItem = heldRef.current;
-    const stState = stationStates[nearby.id] || {};
-
-    if (stState.fire) {
-      if (currentItem === '🧯' || nearby.type === 'extinguisher') {
-        syncStationUpdate(nearby.id, { ...stState, fire: false, progress: 0 });
-        addLog(`🧯 ${playerName} a éteint le feu !`);
-      } else if (nearby.type === 'extinguisher' && currentItem === '') {
-        heldRef.current = '🧯';
-        setHeldItem('🧯');
-        addLog(`🧯 ${playerName} a pris l'extincteur.`);
-        syncMyState(posRef.current, '🧯', contribRef.current);
-      }
-      return;
-    }
-
-    if (nearby.type === 'extinguisher') {
-      if (currentItem === '') {
-        heldRef.current = '🧯';
-        setHeldItem('🧯');
-        addLog(`🧯 ${playerName} a pris l'extincteur.`);
-        syncMyState(posRef.current, '🧯', contribRef.current);
-      } else if (currentItem === '🧯') {
-        heldRef.current = '';
-        setHeldItem('');
-        addLog(`🧯 ${playerName} a rangé l'extincteur.`);
-        syncMyState(posRef.current, '', contribRef.current);
-      }
-      return;
-    }
-
-    if (nearby.type === 'crate' && currentItem === '') {
-      if (roleRef.current !== 'prep') {
-        addLog(`⚠️ C'est le côté préparation (Chef Gauche) !`);
-        return;
-      }
-      if (nearby.item === activeTicket.requiredItem) {
-        const item = nearby.item;
-        heldRef.current = item;
-        setHeldItem(item);
-        
-        syncLiveAchievement(
-          `✅ Ingrédient ${item} pris`,
-          `Chef Gauche : Découper sur la planche 🔪`
-        );
-
-        addLog(`${playerEmoji} ${playerName} a pris ${item}`);
-        syncMyState(posRef.current, item, contribRef.current);
-      } else {
-        addLog(`❌ Mauvais ingrédient ! Il faut ${activeTicket.requiredItem}`);
-      }
-    } 
-    else if (nearby.type === 'board') {
-      if (roleRef.current !== 'prep') {
-        addLog(`⚠️ Le poste de découpe est réservé au Chef Gauche !`);
-        return;
-      }
-      if (stState.readyItem && currentItem === '') {
-        const picked = stState.readyItem;
-        heldRef.current = picked;
-        setHeldItem(picked);
-        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        addLog(`${playerEmoji} ${playerName} a récupéré ${picked}`);
-        syncMyState(posRef.current, picked, contribRef.current);
-      } else if (currentItem === activeTicket.requiredItem && !stState.progress && !stState.readyItem) {
-        const itemToPrep = currentItem;
-        heldRef.current = '';
-        setHeldItem('');
-        syncMyState(posRef.current, '', contribRef.current);
-        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToPrep, isWorking: true });
-
-        setMinigameData({
-          stationId: nearby.id,
-          targetTaps: 5,
-          currentTaps: 0,
-          item: itemToPrep,
-          label: '🔪 Appuyez ESPACE / Tap en Cadence !'
-        });
-      }
-    } 
-    else if (nearby.type === 'stove') {
-      if (roleRef.current !== 'cook') {
-        addLog(`⚠️ La cuisson est réservée au Chef Droit !`);
-        return;
-      }
-      if (stState.readyItem && currentItem === '') {
-        const picked = stState.readyItem;
-        heldRef.current = picked;
-        setHeldItem(picked);
-        syncStationUpdate(nearby.id, { ...stState, readyItem: null, isCooking: false });
-        addLog(`${playerEmoji} ${playerName} a récupéré le plat cuit 🔥`);
-        syncMyState(posRef.current, picked, contribRef.current);
-      } else if (currentItem === activeTicket.requiredPrep && !stState.progress && !stState.readyItem) {
-        if (nearby.itemType !== activeTicket.requiredPot) {
-          const penaltyScore = Math.max(0, scoreRef.current - 5);
-          setScore(penaltyScore);
-          scoreRef.current = penaltyScore;
-          if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
-          addLog(`❌ MAUVAIS USTENSILE ! Ce plat ne va pas dans ${nearby.label} (-5 pts)`);
-          syncLiveAchievement(`❌ Mauvais ustensile ! (-5 pts)`, null, true);
-          return;
-        }
-        const itemToCook = currentItem;
-        heldRef.current = '';
-        setHeldItem('');
-        syncMyState(posRef.current, '', contribRef.current);
-        syncStationUpdate(nearby.id, { ...stState, currentItem: itemToCook, isCooking: true });
-
-        setTempMinigame({
-          stationId: nearby.id,
-          item: itemToCook,
-          sliderPos: 0,
-          direction: 2
-        });
-      }
-    }
-    else if (nearby.type === 'pass') {
-      if (currentItem === activeTicket.requiredItem) {
-        addLog(`❌ ERREUR PASSE-PLATS : Vous devez d'abord découper l'ingrédient sur la planche 🔪 !`);
-        syncLiveAchievement(`❌ Découpez l'ingrédient d'abord !`, null, true);
-        return;
-      }
-
-      if (stState.readyItem && currentItem === '') {
-        const picked = stState.readyItem;
-        heldRef.current = picked;
-        setHeldItem(picked);
-        syncStationUpdate(nearby.id, { ...stState, readyItem: null });
-        
-        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
-        syncLiveAchievement(
-          `✅ Récupéré du Passe-Plats (+5 pts)`,
-          `Chef Droit : Cuire dans ${correctPotName} 🔥`
-        );
-
-        addLog(`🪟 ${playerName} a pris ${picked} du passe-plats.`);
-        syncMyState(posRef.current, picked, contribRef.current);
-      } else if (currentItem !== '' && !stState.readyItem) {
-        const dropped = currentItem;
-        heldRef.current = '';
-        setHeldItem('');
-        syncStationUpdate(nearby.id, { ...stState, readyItem: dropped });
-        
-        const newScore = scoreRef.current + 5;
-        const newContrib = contribRef.current + 5;
-        scoreRef.current = newScore;
-        contribRef.current = newContrib;
-        setScore(newScore);
-        setMyContributions(newContrib);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
-
-        const correctPotName = activeTicket.requiredPot === 'tagine' ? 'Tagine 🍲' : 'Théière 🫖';
-        syncLiveAchievement(
-          `✅ Posé sur le Passe-Plats 🪟 (+5 pts)`,
-          `Chef Droit : Prendre du Passe-Plats 🪟 puis cuire dans ${correctPotName} 🔥`
-        );
-
-        addLog(`🪟 ${playerName} a passé ${dropped} (+5 pts) !`);
-        syncMyState(posRef.current, '', contribRef.current);
-      }
-    }
-    else if (nearby.type === 'serve') {
-      if (roleRef.current !== 'cook') {
-        addLog(`⚠️ Le service est réservé au Chef Droit !`);
-        return;
-      }
-      if (currentItem === activeTicket.finalCook || currentItem === '🍲' || currentItem === '🫖') {
-        heldRef.current = '';
-        setHeldItem('');
-        const pts = activeTicket.points;
-        const newScore = scoreRef.current + pts + 5;
-        const newContrib = contribRef.current + pts + 5;
-        scoreRef.current = newScore;
-        contribRef.current = newContrib;
-        setScore(newScore);
-        setMyContributions(newContrib);
-
-        syncLiveAchievement(`✅ Plat servi avec succès (+${pts + 5} pts)`, null);
-        addLog(`${playerEmoji} ${playerName} a servi ${activeTicket.title} ! (+${pts + 5} pts) 🛎️`);
-        
-        const modalData = {
-          title: activeTicket.title,
-          earnedPts: pts + 5
-        };
-
-        if (db && roomCode) {
-          update(ref(db, `rooms/${roomCode}`), { 
-            score: newScore,
-            congratsModal: modalData,
-            pausedTimer: true
-          });
-        }
-        syncMyState(posRef.current, '', contribRef.current);
-      } else {
-        const penaltyScore = Math.max(0, scoreRef.current - 5);
-        setScore(penaltyScore);
-        scoreRef.current = penaltyScore;
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
-        addLog(`❌ ERREUR DE SERVICE ! Plat non conforme (-5 pts)`);
-        syncLiveAchievement(`❌ Plat non conforme (-5 pts)`, null, true);
-      }
-    }
-  };
-
+  // Game Loop Physics
   useEffect(() => {
-    if (!tempMinigame) return;
+    if (gameState !== 'playing' || isHost) return;
+
+    const gravity = 0.6;
+    const friction = 0.82;
+    const moveSpeed = 1.2;
+    const jumpForce = -12;
+    const floorY = 450;
+    const canvasWidth = 800;
+
     const interval = setInterval(() => {
-      setTempMinigame(prev => {
-        if (!prev) return null;
-        let nextPos = prev.sliderPos + prev.direction;
-        let nextDir = prev.direction;
-        if (nextPos >= 100 || nextPos <= 0) {
-          nextDir = -nextDir;
-        }
-        return { ...prev, sliderPos: nextPos, direction: nextDir };
-      });
-    }, 25);
-    return () => clearInterval(interval);
-  }, [tempMinigame]);
+      let vx = velRef.current.x;
+      let vy = velRef.current.y;
+      let px = posRef.current.x;
+      let py = posRef.current.y;
 
-  const handleTempSubmit = () => {
-    if (!tempMinigame) return;
-    const pos = tempMinigame.sliderPos;
-    const stationId = tempMinigame.stationId;
-    const item = tempMinigame.item;
-
-    const isSuccess = pos >= 40 && pos <= 65;
-
-    if (isSuccess) {
-      const result = item === '🌿' ? '🫖' : '🍲';
-      syncStationUpdate(stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false, isCooking: false });
-      
-      const newScore = scoreRef.current + 5;
-      const newContrib = contribRef.current + 5;
-      scoreRef.current = newScore;
-      contribRef.current = newContrib;
-      setScore(newScore);
-      setMyContributions(newContrib);
-
-      syncLiveAchievement(
-        `✅ Cuisson réussie (+5 pts)`,
-        `Chef Droit : Apporter au Comptoir 🛎️`
-      );
-
-      addLog(`🔥 Cuisson réussie (+5 pts) ➔ ${result}`);
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
-    } else {
-      syncStationUpdate(stationId, { progress: 0, label: '', currentItem: null, readyItem: null, fire: false, isCooking: false });
-      const penaltyScore = Math.max(0, scoreRef.current - 5);
-      setScore(penaltyScore);
-      scoreRef.current = penaltyScore;
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: penaltyScore });
-      addLog(`❌ CUISSON RATÉE ! Température incorrecte (-5 pts)`);
-      syncLiveAchievement(`❌ Cuisson ratée (-5 pts)`, null, true);
-    }
-    setTempMinigame(null);
-  };
-
-  const handleMinigameTap = () => {
-    if (!minigameData) return;
-    const updatedTaps = minigameData.currentTaps + 1;
-    if (updatedTaps >= minigameData.targetTaps) {
-      // FIX: Mint (🌿) correctly maps to prepped state 🌿
-      const choppedMap = { '🍅': '🥗', '🌶️': '🥗', '🍗': '🍖', '🌿': '🌿' };
-      const result = choppedMap[minigameData.item] || '🥗';
-      
-      syncStationUpdate(minigameData.stationId, { progress: 0, label: 'Prêt !', currentItem: null, readyItem: result, fire: false, isWorking: false });
-      
-      const newScore = scoreRef.current + 5;
-      const newContrib = contribRef.current + 5;
-      scoreRef.current = newScore;
-      contribRef.current = newContrib;
-      setScore(newScore);
-      setMyContributions(newContrib);
-
-      syncLiveAchievement(
-        `✅ Découpe réussie (+5 pts)`,
-        `Chef Gauche : Mettre sur le Passe-Plats 🪟`
-      );
-
-      addLog(`🔪 Découpe réussie (+5 pts) ➔ ${result}`);
-      if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { score: newScore });
-      setMinigameData(null);
-    } else {
-      setMinigameData(prev => ({ ...prev, currentTaps: updatedTaps }));
-    }
-  };
-
-  useEffect(() => {
-    if (gameState !== 'playing' || !isHost) return;
-    const fireInterval = setInterval(() => {
-      const stoveStations = STATIONS.filter(s => s.type === 'stove');
-      const randomStove = stoveStations[Math.floor(Math.random() * stoveStations.length)];
-      
-      const currentSt = stationStates[randomStove.id] || {};
-      if (!currentSt.fire && Math.random() < 0.2) {
-        syncStationUpdate(randomStove.id, { ...currentSt, fire: true, label: '🔥 FEU !' });
-        addLog(`🚨 ALERTE FEU sur ${randomStove.label} ! Éteignez-le (🧯) !`);
+      if (keysPressed.current['ArrowLeft'] || keysPressed.current['a'] || keysPressed.current['A']) {
+        vx -= moveSpeed;
+        setFacingRight(false);
       }
-    }, 15000);
-    return () => clearInterval(fireInterval);
-  }, [gameState, isHost, stationStates]);
+      if (keysPressed.current['ArrowRight'] || keysPressed.current['d'] || keysPressed.current['D']) {
+        vx += moveSpeed;
+        setFacingRight(true);
+      }
 
-  const advanceNextRecipe = () => {
-    const nextRecipe = RECIPES[(RECIPES.findIndex(r => r.id === activeTicket.id) + 1) % RECIPES.length];
-    const initialAch = { text: `Chef Gauche : Prendre ${nextRecipe.requiredItem}`, state: 'active', id: Date.now() };
-    setActiveTicket(nextRecipe);
-    setAchievementPopup(initialAch);
-    setCongratsModal(null);
-    setPausedTimer(false);
-    if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), {
-        activeTicket: nextRecipe,
-        achievement: initialAch,
-        congratsModal: null,
-        pausedTimer: false
+      vx *= friction;
+      vy += gravity;
+
+      px += vx;
+      py += vy;
+
+      // Floor collision
+      let grounded = false;
+      if (py >= floorY) {
+        py = floorY;
+        vy = 0;
+        grounded = true;
+        jumpsRef.current = 2;
+      }
+
+      // Platform collisions
+      PLATFORMS.forEach(plat => {
+        if (
+          px + 30 > plat.x &&
+          px < plat.x + plat.w &&
+          py + 40 >= plat.y &&
+          py + 40 <= plat.y + 16 &&
+          vy > 0
+        ) {
+          py = plat.y - 40;
+          vy = 0;
+          grounded = true;
+          jumpsRef.current = 2;
+        }
       });
-    }
-  };
 
+      // Boundaries
+      if (px < 0) px = 0;
+      if (px > canvasWidth - 40) px = canvasWidth - 40;
+
+      posRef.current = { x: px, y: py };
+      velRef.current = { x: vx, y: vy };
+      groundedRef.current = grounded;
+
+      setPos({ x: px, y: py });
+      setIsGrounded(grounded);
+      setJumpsLeft(jumpsRef.current);
+
+      syncMyState({ x: px, y: py });
+    }, 20);
+
+    return () => clearInterval(interval);
+  }, [gameState, isHost]);
+
+  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing' || isHost) return;
-      if (congratsModal && (e.key === ' ' || e.key === 'Enter')) {
+      keysPressed.current[e.key] = true;
+
+      if ((e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
-        advanceNextRecipe();
-        return;
-      }
-      if (pausedTimer) return;
-      const step = 4;
-      if (minigameData && (e.key === ' ' || e.key === 'Enter')) {
-        e.preventDefault();
-        handleMinigameTap();
-        return;
-      }
-      if (tempMinigame && (e.key === ' ' || e.key === 'Enter')) {
-        e.preventDefault();
-        handleTempSubmit();
-        return;
-      }
-      if (['w', 'W', 'ArrowUp'].includes(e.key)) movePlayer(0, -step);
-      if (['s', 'S', 'ArrowDown'].includes(e.key)) movePlayer(0, step);
-      if (['a', 'A', 'ArrowLeft'].includes(e.key)) movePlayer(-step, 0);
-      if (['d', 'D', 'ArrowRight'].includes(e.key)) movePlayer(step, 0);
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        interactStation();
+        velRef.current.y = -11;
+        jumpsRef.current -= 1;
+        setJumpsLeft(jumpsRef.current);
       }
     };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, isHost, minigameData, tempMinigame, congratsModal, pausedTimer, stationStates, activeTicket]);
 
+    const handleKeyUp = (e) => {
+      keysPressed.current[e.key] = false;
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [gameState, isHost]);
+
+  // Firebase sync
   useEffect(() => {
     if (!db || !roomCode) return;
     const roomRef = ref(db, `rooms/${roomCode}`);
@@ -554,168 +186,51 @@ export default function App() {
       const data = snapshot.val();
       if (data) {
         setGameState(data.status || 'waiting');
-        const currentScore = data.score || 0;
-        setScore(currentScore);
-        scoreRef.current = currentScore;
         setPlayers(data.players || {});
-        setStationStates(data.stations || {});
-        if (data.activeTicket) setActiveTicket(data.activeTicket);
-        if (data.achievement !== undefined) setAchievementPopup(data.achievement);
-        setCongratsModal(data.congratsModal || null);
-        setPausedTimer(!!data.pausedTimer);
-        if (data.countdown !== undefined) setCountdown(data.countdown);
-        if (data.endTime !== undefined) setEndTime(data.endTime);
         if (data.logs) setLogs(data.logs);
       }
     });
-
-    const lbRef = ref(db, 'leaderboard_v46');
-    const unsubLb = onValue(lbRef, (snapshot) => {
-      const lbData = snapshot.val();
-      if (lbData) {
-        const sorted = Object.values(lbData).sort((a, b) => b.score - a.score);
-        setLeaderboard(sorted);
-      } else {
-        setLeaderboard([]);
-      }
-    });
-
-    return () => {
-      unsubscribe();
-      unsubLb();
-    };
+    return () => unsubscribe();
   }, [roomCode]);
 
-  useEffect(() => {
-    if (gameState !== 'playing' || !endTime || pausedTimer) return;
-
-    const interval = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
-      setTimeLeft(remaining);
-
-      if (remaining <= 0) {
-        clearInterval(interval);
-        if (isHost && db && roomCode) {
-          update(ref(db, `rooms/${roomCode}`), { status: 'gameover' });
-          push(ref(db, 'leaderboard_v46'), {
-            room: roomCode,
-            score: scoreRef.current,
-            date: new Date().toLocaleDateString()
-          });
-        }
-      }
-    }, 250);
-
-    return () => clearInterval(interval);
-  }, [gameState, endTime, pausedTimer, isHost, roomCode]);
-
-  const addLog = (msg) => {
-    const newLogs = [msg, ...logs.slice(0, 20)];
-    setLogs(newLogs);
-    if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), { logs: newLogs });
-    }
-  };
-
   const startShift = () => {
-    if (Object.keys(players).length < 2) {
-      alert('⚠️ Minimum 2 Chefs requis pour la co-op !');
-      return;
-    }
-
-    setMyContributions(0);
-    contribRef.current = 0;
-    const startAch = { text: 'Chef Gauche : Prendre 🍅', state: 'active', id: Date.now() };
-    setAchievementPopup(startAch);
-
     if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), {
-        status: 'countdown',
-        countdown: 3,
-        score: 0,
-        stations: {},
-        activeTicket: RECIPES[0],
-        achievement: startAch,
-        congratsModal: null,
-        pausedTimer: false
-      });
+      update(ref(db, `rooms/${roomCode}`), { status: 'playing' });
     }
-
-    let count = 3;
-    const cdInterval = setInterval(() => {
-      count -= 1;
-      if (count > 0) {
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}`), { countdown: count });
-      } else {
-        clearInterval(cdInterval);
-        const targetEnd = Date.now() + 120000;
-        if (db && roomCode) {
-          update(ref(db, `rooms/${roomCode}`), { status: 'playing', countdown: 0, endTime: targetEnd });
-        }
-      }
-    }, 1000);
   };
 
   const createRoom = () => {
     const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const profile = getRandomProfile();
     setRoomCode(code);
     setIsHost(true);
+    setPlayerName(profile.name);
+    setPlayerEmoji(profile.emoji);
     setScreen('host_lobby');
 
     if (db) {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
-        score: 0,
-        stations: {},
-        logs: [`👑 Salon ${code} ouvert par le Chef Hôte`]
+        logs: [`👑 Salon ${code} ouvert`]
       });
     }
   };
 
-  const joinRoom = async (e) => {
+  const joinRoom = (e) => {
     e.preventDefault();
     if (!roomCode) return;
     setIsHost(false);
-
-    let assignedRole = 'prep';
-    let existingPlayers = {};
-    if (db) {
-      try {
-        const snap = await get(ref(db, `rooms/${roomCode}/players`));
-        existingPlayers = snap.val() || {};
-        const rolesTaken = Object.values(existingPlayers).map(p => p.role);
-        if (rolesTaken.includes('prep') && !rolesTaken.includes('cook')) {
-          assignedRole = 'cook';
-        } else if (rolesTaken.includes('cook') && !rolesTaken.includes('prep')) {
-          assignedRole = 'prep';
-        } else {
-          assignedRole = rolesTaken.length % 2 === 0 ? 'prep' : 'cook';
-        }
-      } catch (err) {
-        console.warn("Role check fallback:", err);
-      }
-    }
-
-    const profile = getRandomUniqueProfile(existingPlayers);
-    setMyRole(assignedRole);
-    roleRef.current = assignedRole;
+    const profile = getRandomProfile();
     setPlayerName(profile.name);
     setPlayerEmoji(profile.emoji);
-
-    const startX = assignedRole === 'prep' ? 22 : 78;
-    setPos({ x: startX, y: 50 });
-    posRef.current = { x: startX, y: 50 };
-
     setScreen('player_lobby');
+
     if (db) {
       set(ref(db, `rooms/${roomCode}/players/${myId}`), {
         name: profile.name,
         emoji: profile.emoji,
-        x: startX,
-        y: 50,
-        item: '',
-        contributions: 0,
-        role: assignedRole
+        x: 100,
+        y: 400
       });
     }
   };
@@ -723,113 +238,36 @@ export default function App() {
   return (
     <div style={styles.appContainer}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap');
-        @keyframes smoothFadeIn {
-          0% { opacity: 0; transform: translateY(20px) scale(0.96); }
-          100% { opacity: 1; transform: translateY(0) scale(1); }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+        * { font-family: 'Inter', sans-serif; box-sizing: border-box; }
+        @keyframes floatCloud {
+          0% { transform: translateX(0); }
+          50% { transform: translateX(15px); }
+          100% { transform: translateX(0); }
         }
-        @keyframes popScale {
-          0% { transform: scale(0.3); opacity: 0; }
-          50% { transform: scale(1.15); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        @keyframes fallAndSpinSmooth {
-          0% { transform: translateY(-10vh) rotate(0deg); opacity: 0.8; }
-          100% { transform: translateY(110vh) rotate(720deg); opacity: 0.1; }
-        }
-        @keyframes pulseGreen {
-          0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-          70% { transform: scale(1.05); box-shadow: 0 0 0 25px rgba(16, 185, 129, 0); }
-          100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        @keyframes knifeChopping {
-          0% { transform: rotate(0deg) translateY(0); }
-          50% { transform: rotate(-35deg) translateY(-8px); }
-          100% { transform: rotate(0deg) translateY(0); }
-        }
-        @keyframes potCookingGlow {
-          0% { transform: scale(1); filter: drop-shadow(0 0 4px #f59e0b); }
-          50% { transform: scale(1.08); filter: drop-shadow(0 0 16px #f59e0b) brightness(1.2); }
-          100% { transform: scale(1); filter: drop-shadow(0 0 4px #f59e0b); }
-        }
-        @keyframes fireAlarm {
-          0% { transform: scale(1); filter: brightness(1); }
-          50% { transform: scale(1.12); filter: brightness(1.6) drop-shadow(0 0 12px #ef4444); }
-          100% { transform: scale(1); filter: brightness(1); }
-        }
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes achievementSlide {
-          0% { transform: translate(-50%, -30px); opacity: 0; }
-          100% { transform: translate(-50%, 0); opacity: 1; }
-        }
-        * { font-family: 'Inter', system-ui, -apple-system, sans-serif; box-sizing: border-box; }
-        .screen-anim { animation: smoothFadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .countdown-num { animation: popScale 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .pulse-btn { animation: pulseGreen 2s infinite; }
-        .knife-anim { animation: knifeChopping 0.2s ease-in-out infinite; }
-        .cooking-glow-anim { animation: potCookingGlow 0.6s ease-in-out infinite; }
-        .fire-anim { animation: fireAlarm 0.5s ease-in-out infinite; }
-        .achievement-card { animation: achievementSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .falling-emoji {
-          position: fixed;
-          top: -60px;
-          font-size: 2.5rem;
-          animation: fallAndSpinSmooth linear infinite;
-          z-index: 1;
-          pointer-events: none;
-        }
-        button { transition: transform 0.2s, filter 0.2s; user-select: none; }
-        button:active { transform: scale(0.93); }
       `}</style>
 
-      {(screen === 'home' || screen === 'mode_select') && (
-        <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
-          {backgroundParticles.map((p) => (
-            <div
-              key={p.id}
-              className="falling-emoji"
-              style={{
-                left: `${p.left}%`,
-                animationDuration: `${p.duration}s`,
-                animationDelay: `${p.delay}s`
-              }}
-            >
-              {p.emoji}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* HOME SCREEN */}
+      {/* HOME */}
       {screen === 'home' && (
-        <div key="home" className="screen-anim" style={styles.centeredWrapper}>
+        <div style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subSubtitle}>Cuisine Co-op Multijoueur</p>
-            <button 
-              onClick={() => setScreen('mode_select')} 
-              style={{ ...styles.primaryButton, ...styles.flashingPlayBtn }}
-              className="pulse-btn"
-            >
-              ▶️ JOUER
-            </button>
+            <h1 style={styles.mainTitle}>☁️ Platformer Co-op</h1>
+            <p style={styles.subTitle}>Saute, Double-Saute et Explore !</p>
+            <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
       )}
 
       {/* MODE SELECT */}
       {screen === 'mode_select' && (
-        <div key="mode_select" className="screen-anim" style={styles.centeredWrapper}>
+        <div style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainGameTitle}>🍳 Zellige & Saffron</h1>
-            <button onClick={createRoom} style={styles.primaryButton}>👑 Héberger une Partie (Hôte Spec)</button>
-            <div style={styles.divider}><span style={styles.dividerText}>OU</span></div>
-            <form onSubmit={joinRoom} style={styles.form}>
+            <h1 style={styles.mainTitle}>☁️ Mode de Jeu</h1>
+            <button onClick={createRoom} style={styles.primaryBtn}>👑 Héberger Salon</button>
+            <div style={styles.divider}><span>OU</span></div>
+            <form onSubmit={joinRoom} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <input
                 type="text"
                 placeholder="CODE DE SALON"
@@ -838,7 +276,7 @@ export default function App() {
                 style={styles.input}
                 required
               />
-              <button type="submit" style={styles.secondaryButton}>🧑‍🍳 Rejoindre en tant que Joueur</button>
+              <button type="submit" style={styles.secondaryBtn}>🎮 Rejoindre</button>
             </form>
             <button onClick={() => setScreen('home')} style={styles.backBtn}>⬅️ Retour</button>
           </div>
@@ -847,331 +285,71 @@ export default function App() {
 
       {/* HOST LOBBY */}
       {isHost && (
-        <div key="host" className="screen-anim" style={styles.hostFullScreen}>
+        <div style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={styles.codeBadge}>🔑 <strong>{roomCode}</strong></div>
-              <button onClick={copyRoomCode} style={styles.copyBtn} title="Copier le code">
-                {copied ? '✅' : '📋'}
-              </button>
-            </div>
-            <div style={styles.scoreBoard}>🪙 {score}</div>
-            <div style={styles.codeBadge}>⏱️ {gameState === 'playing' ? `${timeLeft}s` : '120s'}</div>
+            <div style={styles.codeBadge}>🔑 {roomCode} <button onClick={copyRoomCode} style={styles.copyBtn}>{copied ? '✅' : '📋'}</button></div>
           </div>
-
-          <div style={styles.hostMainGrid}>
-            <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>👑 Mode Hôte : Chefs en Ligne ({Object.keys(players).length} / Min 2)</h3>
-              <ul style={styles.playerList}>
-                {Object.keys(players).length === 0 ? (
-                  <p style={{ color: '#94a3b8', textAlign: 'center', marginTop: '30px', fontSize: '1.1rem' }}>En attente de 2 joueurs connectés...</p>
-                ) : (
-                  Object.keys(players).map((pid) => (
-                    <li key={pid} style={styles.playerItem}>
-                      <span style={{ fontWeight: '700', fontSize: '1.2rem' }}>{players[pid].emoji} {players[pid].name} ({players[pid].role === 'prep' ? '🔪 Chef Gauche' : '🍲 Chef Droit'})</span>
-                      <span style={{ color: '#34d399', fontWeight: '800', fontSize: '1.2rem' }}>{players[pid].contributions || 0} pts</span>
-                    </li>
-                  ))
-                )}
-              </ul>
+          <div style={styles.hostGrid}>
+            <div style={styles.panel}>
+              <h3>👥 Joueurs connectés</h3>
+              {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs...</p> : (
+                Object.keys(players).map(id => (
+                  <div key={id} style={styles.playerItem}>
+                    <span>{players[id].emoji} {players[id].name}</span>
+                  </div>
+                ))
+              )}
             </div>
-
-            <div style={styles.dashPanel}>
-              <h3 style={styles.panelTitle}>📜 Journal de Cuisine</h3>
-              <div style={styles.logsBox}>
-                {logs.map((lg, idx) => (
-                  <div key={idx} style={{ ...styles.logLine, color: lg.includes('ERREUR') || lg.includes('FEU') ? '#ef4444' : '#e2e8f0' }}>{lg}</div>
-                ))}
-              </div>
+            <div style={styles.panel}>
+              <h3>📜 Journal</h3>
+              <div style={styles.logsBox}>{logs.map((l, i) => <div key={i}>{l}</div>)}</div>
             </div>
           </div>
-
-          <div style={styles.hostFooter}>
-            {gameState === 'waiting' || gameState === 'gameover' ? (
-              <button
-                onClick={startShift}
-                style={{
-                  ...styles.primaryButton,
-                  maxWidth: '440px',
-                  fontSize: '1.3rem',
-                  background: Object.keys(players).length < 2 ? '#374151' : 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  cursor: Object.keys(players).length < 2 ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {gameState === 'gameover' ? '🔄 Relancer le Service (120s)' : `🚀 Démarrer le Service (${Object.keys(players).length}/2)`}
-              </button>
-            ) : (
-              <div style={{ color: '#34d399', fontWeight: '900', fontSize: '1.4rem' }}>🔥 Service Co-op en Cours !</div>
-            )}
+          <div style={{ textAlign: 'center' }}>
+            <button onClick={startShift} style={styles.primaryBtn}>🚀 Lancer le Jeu</button>
           </div>
         </div>
       )}
 
       {/* PLAYER LOBBY */}
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
-        <div key="wait" className="screen-anim" style={styles.centeredWrapper}>
-          <div style={styles.lobbyCardWide}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '10px' }}>
-              <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#fbbf24' }}>Salon : {roomCode}</div>
-              <div style={styles.roleBadgeInline}>
-                Rôle : <strong style={{ color: '#38bdf8' }}>{myRole === 'prep' ? '🔪 Chef Gauche' : '🍲 Chef Droit'}</strong>
-              </div>
-            </div>
-
-            <div style={styles.lobbyGrid}>
-              <div style={styles.guideBox}>
-                <h4 style={styles.guideTitle}>📖 Guide Rapide</h4>
-                <ul style={styles.guideList}>
-                  <li><strong>Chef Gauche :</strong> Prends les ingrédients (caisses) et découpe sur la planche 🔪.</li>
-                  <li><strong>Passe-Plats :</strong> Utilisez 🪟 pour passer les ingrédients préparés !</li>
-                  <li><strong>Chef Droit :</strong> Récupérez du passe-plats, cuisez dans les pots 🍲/🫖 et servez au comptoir 🛎️.</li>
-                </ul>
-              </div>
-
-              <div style={styles.customBox}>
-                <h4 style={styles.guideTitle}>✏️ Personnalisez votre Chef</h4>
-                <input
-                  type="text"
-                  value={playerName}
-                  onChange={(e) => handleCustomizationChange(e.target.value, playerEmoji)}
-                  style={styles.inputCompact}
-                  placeholder="Votre nom..."
-                />
-                <div style={styles.emojiGridCompact}>
-                  {EMOJIS.map((em) => (
-                    <button
-                      key={em}
-                      type="button"
-                      onClick={() => handleCustomizationChange(playerName, em)}
-                      style={{
-                        ...styles.emojiBtnCompact,
-                        borderColor: playerEmoji === em ? '#10b981' : 'rgba(255,255,255,0.1)',
-                        background: playerEmoji === em ? 'rgba(16, 185, 129, 0.25)' : 'rgba(15, 23, 42, 0.6)'
-                      }}
-                    >
-                      {em}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.loadingFooter}>
-              <div style={styles.spinnerSmall}></div>
-              <span style={{ color: '#e2e8f0', fontSize: '0.95rem', fontWeight: '700' }}>⏳ En attente de l'hôte pour démarrer...</span>
-            </div>
+        <div style={styles.centeredWrapper}>
+          <div style={styles.menuBox}>
+            <h3>Salon : {roomCode}</h3>
+            <p style={{ color: '#38bdf8', fontSize: '1.2rem', margin: '20px 0' }}>{playerEmoji} {playerName}</p>
+            <p style={{ color: '#94a3b8' }}>⏳ En attente du démarrage par l'hôte...</p>
           </div>
         </div>
       )}
 
-      {gameState === 'countdown' && (
-        <div style={styles.countdownOverlay}>
-          <div key={countdown} className="countdown-num" style={styles.countdownText}>
-            {countdown > 0 ? countdown : '🔥 EN CUISINE !'}
-          </div>
-        </div>
-      )}
-
-      {/* ACTIVE GAMEPLAY SCREEN */}
+      {/* ACTIVE GAME SCREEN */}
       {!isHost && gameState === 'playing' && (
-        <div key="play" className="screen-anim" style={styles.gameContainer}>
-          <header style={styles.header}>
-            <div style={{ justifySelf: 'start' }}>
-              <div style={styles.timerBox}>
-                ⏱️ <strong style={{ color: timeLeft <= 15 ? '#ef4444' : '#fff', fontSize: '1.1rem', fontVariantNumeric: 'tabular-nums' }}>{timeLeft}s</strong>
+        <div style={styles.gameContainer}>
+          <div style={styles.cloud1}>☁️</div>
+          <div style={styles.cloud2}>☁️</div>
+
+          {/* Platforms */}
+          {PLATFORMS.map((p, idx) => (
+            <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${p.y}px`, width: `${p.w}px`, height: `${p.h}px` }} />
+          ))}
+
+          {/* Ground */}
+          <div style={styles.ground} />
+
+          {/* Render Players */}
+          {Object.keys(players).map(pid => {
+            const p = players[pid];
+            const isMe = pid === myId;
+            const px = isMe ? pos.x : (p.x || 100);
+            const py = isMe ? pos.y : (p.y || 400);
+
+            return (
+              <div key={pid} style={{ ...styles.playerNode, left: `${px}px`, top: `${py}px` }}>
+                <div style={{ fontSize: '2.2rem' }}>{p.emoji || playerEmoji}</div>
+                <div style={styles.tag}>{p.name || playerName}</div>
               </div>
-            </div>
-
-            <div style={{ justifySelf: 'center' }}>
-              <div style={styles.dishHeaderTitle}>🍲 Plat en cours : <span style={{ color: '#fbbf24' }}>{activeTicket.title}</span></div>
-            </div>
-
-            <div style={{ justifySelf: 'end', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={styles.scoreBoard}>🪙 {score}</div>
-              <div style={styles.headerItem}>🤲 <span style={{ fontSize: '1.6rem' }}>{heldItem || '➖'}</span></div>
-            </div>
-          </header>
-
-          <div style={styles.activeLayout}>
-            <div style={styles.kitchenFloor}>
-              <div style={styles.barrierLine}></div>
-
-              {achievementPopup && (
-                <div key={achievementPopup.id || achievementPopup.text} className="achievement-card" style={{
-                  ...styles.achievementBanner,
-                  background: achievementPopup.state === 'success' ? 'rgba(16, 185, 129, 0.95)' : (achievementPopup.state === 'error' ? 'rgba(153, 27, 27, 0.95)' : 'rgba(30, 27, 75, 0.95)'),
-                  borderColor: achievementPopup.state === 'success' ? '#34d399' : (achievementPopup.state === 'error' ? '#ef4444' : '#fbbf24')
-                }}>
-                  <span style={{ fontSize: '1.5rem' }}>{achievementPopup.state === 'success' ? '✅' : '❌'}</span>
-                  <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#fff' }}>{achievementPopup.text}</span>
-                </div>
-              )}
-
-              {STATIONS.map((st) => {
-                const stState = stationStates[st.id] || {};
-                const isWorking = stState.isWorking || stState.progress > 0;
-                const isCooking = stState.isCooking;
-                const isReady = !!stState.readyItem;
-                const hasFire = !!stState.fire;
-
-                const isChoppingBoard = st.type === 'board';
-                const isStove = st.type === 'stove';
-
-                return (
-                  <div
-                    key={st.id}
-                    style={{
-                      ...styles.station,
-                      left: `${st.x}%`,
-                      top: `${st.y}%`,
-                      background: hasFire ? '#991b1b' : st.color,
-                      borderColor: hasFire ? '#ef4444' : (isReady ? '#34d399' : (isWorking || isCooking ? '#fbbf24' : 'rgba(255,255,255,0.3)'))
-                    }}
-                  >
-                    <div className={hasFire ? 'fire-anim' : (isChoppingBoard && isWorking ? 'knife-anim' : (isStove && isCooking ? 'cooking-glow-anim' : ''))} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                      <span style={{ fontSize: '2.4rem' }}>
-                        {hasFire ? '🔥' : st.icon}
-                      </span>
-                    </div>
-
-                    <span style={styles.stationLabel}>{hasFire ? 'FEU ! (🧯)' : st.label}</span>
-
-                    {stState.currentItem && !hasFire && (
-                      <div style={styles.stationItemBadge}>{stState.currentItem}</div>
-                    )}
-
-                    {isReady && !hasFire && (
-                      <div style={styles.readyItemBadge}>{stState.readyItem} ✨</div>
-                    )}
-                  </div>
-                );
-              })}
-
-              {Object.keys(players).map((pid) => {
-                const p = players[pid];
-                const isMe = pid === myId;
-                const px = isMe ? pos.x : (p.x || 50);
-                const py = isMe ? pos.y : (p.y || 50);
-                const pItem = isMe ? heldItem : p.item;
-                const displayName = p.name || playerName;
-                const displayEmoji = p.emoji || playerEmoji;
-
-                return (
-                  <div
-                    key={pid}
-                    style={{
-                      ...styles.playerNode,
-                      left: `${px}%`,
-                      top: `${py}%`,
-                      border: isMe ? '3px solid #fbbf24' : '3px solid rgba(255,255,255,0.4)'
-                    }}
-                  >
-                    {pItem && <div style={styles.heldBubble}>{pItem}</div>}
-                    <div style={{ fontSize: '2.4rem' }}>{displayEmoji}</div>
-                    <div style={styles.playerTag}>{displayName}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {congratsModal && (
-            <div style={styles.minigameOverlay}>
-              <div style={styles.congratsCard}>
-                <h2 style={{ color: '#10b981', fontSize: '2.4rem', margin: '0 0 12px 0', fontWeight: '900' }}>🎉 FÉLICITATIONS !</h2>
-                <p style={{ fontSize: '1.25rem', color: '#fff', margin: '8px 0', lineHeight: '1.5' }}>
-                  Vous avez servi <strong>{congratsModal.title}</strong> avec succès ! (+{congratsModal.earnedPts} pts)
-                </p>
-                <div style={styles.divider}></div>
-                <h4 style={{ color: '#fbbf24', margin: '12px 0 8px 0', fontSize: '1.2rem', fontWeight: '800' }}>📜 CONTINUER AVEC VOTRE PROCHAIN REPAS :</h4>
-                <div style={{ background: 'rgba(15, 23, 42, 0.85)', padding: '18px', borderRadius: '16px', margin: '12px 0', border: '1px solid rgba(255,255,255,0.15)' }}>
-                  <div style={{ fontSize: '1.3rem', fontWeight: '800', color: '#38bdf8', marginBottom: '8px' }}>Préparez le prochain ticket ensemble !</div>
-                  <div style={{ fontSize: '1.05rem', color: '#e2e8f0', lineHeight: '1.6' }}>
-                    Le minuteur est en pause. Appuyez sur Espace ou Continuer pour lancer la suite.
-                  </div>
-                </div>
-                <button onClick={advanceNextRecipe} style={{ ...styles.primaryButton, marginTop: '15px', fontSize: '1.2rem' }}>
-                  CONTINUER AVEC VOTRE PROCHAIN REPAS 🚀 (ESPACE)
-                </button>
-              </div>
-            </div>
-          )}
-
-          {minigameData && (
-            <div style={styles.minigameOverlay}>
-              <div style={styles.minigameCard}>
-                <h3 style={{ margin: '0 0 12px 0', color: '#fbbf24', fontSize: '1.5rem', fontWeight: '800' }}>🔪 Découpe en Cadence !</h3>
-                <p style={{ fontSize: '1.1rem', color: '#cbd5e1' }}>{minigameData.label}</p>
-                <div style={{ fontSize: '3rem', margin: '18px 0' }}>{minigameData.item} ➔ 🥗</div>
-                <div style={styles.miniTrackLarge}>
-                  <div style={{ ...styles.miniFillLarge, width: `${(minigameData.currentTaps / minigameData.targetTaps) * 100}%` }}></div>
-                </div>
-                <button onClick={handleMinigameTap} style={styles.tapActionBtn}>
-                  TAP / ESPACE ({minigameData.currentTaps}/{minigameData.targetTaps}) 🔪
-                </button>
-              </div>
-            </div>
-          )}
-
-          {tempMinigame && (
-            <div style={styles.minigameOverlay}>
-              <div style={styles.minigameCard}>
-                <h3 style={{ margin: '0 0 12px 0', color: '#f59e0b', fontSize: '1.5rem', fontWeight: '800' }}>🔥 Contrôle de Température Pot !</h3>
-                <p style={{ fontSize: '1.05rem', color: '#cbd5e1', marginBottom: '12px' }}>Appuyez quand l'indicateur est dans la zone verte !</p>
-                
-                <div style={styles.tempBarContainer}>
-                  <div style={styles.tempGreenZone}></div>
-                  <div style={{ ...styles.tempIndicator, left: `${tempMinigame.sliderPos}%` }}></div>
-                </div>
-
-                <button onClick={handleTempSubmit} style={{ ...styles.tapActionBtn, background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', marginTop: '22px' }}>
-                  🎯 VALIDER LA CUISSON (ESPACE)
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div style={styles.mobileControls}>
-            <div style={styles.dpad}>
-              <div></div>
-              <button onClick={() => movePlayer(0, -6)} style={styles.dpadBtn}>⬆️</button>
-              <div></div>
-              <button onClick={() => movePlayer(-6, 0)} style={styles.dpadBtn}>⬅️</button>
-              <button onClick={() => movePlayer(0, 6)} style={styles.dpadBtn}>⬇️</button>
-              <button onClick={() => movePlayer(6, 0)} style={styles.dpadBtn}>➡️</button>
-            </div>
-            <button onClick={interactStation} style={styles.actionBigBtn}>⚡</button>
-          </div>
-        </div>
-      )}
-
-      {gameState === 'gameover' && !isHost && (
-        <div key="over" className="screen-anim" style={styles.centeredWrapper}>
-          <div style={styles.resultsCard}>
-            <h2 style={{ margin: '0 0 15px 0', color: '#fbbf24', fontSize: '2rem', fontWeight: '900' }}>🏁 Service Co-op Terminé !</h2>
-            <p style={{ fontSize: '1.35rem', margin: '8px 0' }}>Score d’Équipe : <strong>🪙 {score}</strong></p>
-            <p style={{ color: '#34d399', fontSize: '1.15rem', fontWeight: '700' }}>Votre Contribution : {myContributions} pts</p>
-
-            <div style={{ marginTop: '20px', textAlign: 'left' }}>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', color: '#94a3b8', fontWeight: '800' }}>📊 Classement Global (120s) :</h4>
-              <div style={styles.lbBox}>
-                {leaderboard.length === 0 ? (
-                  <p style={{ color: '#94a3b8', textAlign: 'center', fontSize: '0.9rem', margin: '10px 0' }}>Aucun score enregistré (ardoise fraîche)</p>
-                ) : (
-                  leaderboard.map((entry, idx) => (
-                    <div key={idx} style={{ ...styles.lbItem, background: entry.room === roomCode ? 'rgba(16, 185, 129, 0.25)' : 'transparent' }}>
-                      <span style={{ fontWeight: '700', fontSize: '1rem' }}>#{idx + 1} Salon {entry.room}</span>
-                      <span style={{ color: '#38bdf8', fontWeight: '800', fontSize: '1rem' }}>🪙 {entry.score} pts</span>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            <button onClick={() => window.location.reload()} style={{ ...styles.primaryButton, marginTop: '20px', fontSize: '1.2rem' }}>
-              🔄 Rejouer le Service
-            </button>
-          </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -1179,79 +357,31 @@ export default function App() {
 }
 
 const styles = {
-  appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(135deg, #0f172a 0%, #311033 50%, #1e1b4b 100%)', color: '#fff', position: 'relative' },
-  versionBadge: { position: 'fixed', bottom: '12px', left: '16px', fontSize: '0.85rem', fontWeight: '800', color: 'rgba(255, 255, 255, 0.55)', background: 'rgba(0, 0, 0, 0.45)', padding: '4px 10px', borderRadius: '8px', zIndex: 100, pointerEvents: 'none', letterSpacing: '0.5px' },
+  appContainer: { width: '100vw', height: '100vh', overflow: 'hidden', background: 'linear-gradient(180deg, #1e3a8a 0%, #3b82f6 50%, #93c5fd 100%)', position: 'relative', color: '#fff' },
+  versionBadge: { position: 'fixed', bottom: '12px', left: '16px', fontSize: '0.85rem', fontWeight: '800', color: 'rgba(255,255,255,0.6)', background: 'rgba(0,0,0,0.4)', padding: '4px 10px', borderRadius: '8px' },
   centeredWrapper: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', padding: '20px' },
-  mainGameTitle: { fontSize: 'clamp(2.2rem, 5vw, 3.2rem)', margin: '0 0 6px 0', fontWeight: '900', textAlign: 'center', color: '#fbbf24', textShadow: '0 2px 14px rgba(251, 191, 36, 0.35)' },
-  subSubtitle: { fontSize: '1.3rem', color: '#e2e8f0', marginBottom: '30px', fontWeight: '700', textAlign: 'center' },
-  menuBox: { background: 'rgba(30, 27, 75, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px 35px', borderRadius: '32px', textAlign: 'center', width: '100%', maxWidth: '620px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  
-  lobbyCardWide: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '24px 28px', borderRadius: '28px', width: '100%', maxWidth: '780px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  lobbyGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'stretch' },
-  guideBox: { background: 'rgba(15, 23, 42, 0.75)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
-  customBox: { background: 'rgba(15, 23, 42, 0.75)', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', justifyContent: 'center' },
-  guideTitle: { margin: '0 0 10px 0', fontSize: '1.05rem', fontWeight: '800', color: '#fbbf24' },
-  guideList: { margin: 0, paddingLeft: '16px', fontSize: '0.88rem', color: '#cbd5e1', lineHeight: '1.5', display: 'flex', flexDirection: 'column', gap: '6px' },
-  roleBadgeInline: { background: 'rgba(15, 23, 42, 0.8)', padding: '6px 12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.15)', fontSize: '0.95rem' },
-  inputCompact: { width: '100%', padding: '10px 14px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1rem', background: 'rgba(15, 23, 42, 0.85)', color: '#fff', marginBottom: '10px' },
-  emojiGridCompact: { display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px', maxHeight: '100px', overflowY: 'auto' },
-  emojiBtnCompact: { fontSize: '1.3rem', padding: '6px', borderRadius: '10px', border: '1px solid', cursor: 'pointer' },
-  loadingFooter: { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' },
-  spinnerSmall: { width: '22px', height: '22px', border: '3px solid rgba(255,255,255,0.15)', borderTop: '3px solid #10b981', borderRadius: '50%', animation: 'spin 1s linear infinite' },
-
-  resultsCard: { background: 'rgba(30, 27, 75, 0.92)', backdropFilter: 'blur(16px)', border: '1px solid rgba(255, 255, 255, 0.15)', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '100%', maxWidth: '540px', boxShadow: '0 30px 60px rgba(0,0,0,0.7)' },
-  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '20px 30px', background: 'rgba(15, 23, 42, 0.7)' },
-  hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 28px', background: 'rgba(30, 27, 75, 0.88)', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.12)' },
-  hostMainGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '22px', margin: '22px 0', minHeight: 0 },
-  hostFooter: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '12px 0' },
-  dashPanel: { background: 'rgba(30, 27, 75, 0.8)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '18px', padding: '22px', display: 'flex', flexDirection: 'column', overflow: 'hidden' },
-  panelTitle: { margin: '0 0 14px 0', fontSize: '1.25rem', fontWeight: '800', color: '#f1f5f9', borderBottom: '1px solid rgba(255,255,255,0.12)', paddingBottom: '10px' },
-  logsBox: { flex: 1, overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', padding: '14px', borderRadius: '12px' },
-  logLine: { fontSize: '1.05rem', marginBottom: '8px', lineHeight: '1.5' },
-  copyBtn: { background: 'rgba(99, 102, 241, 0.3)', border: '1px solid #6366f1', color: '#fff', padding: '10px 14px', borderRadius: '12px', cursor: 'pointer', fontSize: '1.2rem' },
-  codeBadge: { background: '#4338ca', padding: '10px 18px', borderRadius: '12px', fontSize: '1.35rem', letterSpacing: '2px', border: '1px solid #6366f1', fontWeight: '800' },
-  playerList: { listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '10px', overflowY: 'auto', flex: 1 },
-  playerItem: { background: 'rgba(15, 23, 42, 0.7)', padding: '14px 18px', borderRadius: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid rgba(255,255,255,0.08)' },
-  lbBox: { maxHeight: '160px', overflowY: 'auto', background: 'rgba(15, 23, 42, 0.7)', borderRadius: '12px', padding: '10px', border: '1px solid rgba(255,255,255,0.12)' },
-  lbItem: { display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderRadius: '8px', fontSize: '1rem', marginBottom: '6px' },
-  primaryButton: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(16, 185, 129, 0.3)' },
-  flashingPlayBtn: { fontSize: '1.6rem', padding: '20px', maxWidth: '360px', margin: '15px auto 0 auto' },
-  secondaryButton: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '18px', fontSize: '1.25rem', borderRadius: '16px', cursor: 'pointer', fontWeight: '800', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)' },
-  backBtn: { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', marginTop: '15px' },
-  divider: { margin: '18px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.15)' },
-  dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#221a40', padding: '0 10px', fontSize: '0.85rem', color: '#94a3b8', fontWeight: '800' },
-  form: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  input: { width: '100%', padding: '16px', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.25)', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.7)', color: '#fff' },
-  countdownOverlay: { position: 'fixed', inset: 0, background: 'rgba(9, 13, 22, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50 },
-  countdownText: { fontSize: '6rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 50px rgba(251, 191, 36, 0.7)', textAlign: 'center' },
-  gameContainer: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', background: '#090d16' },
-  header: { display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', padding: '12px 24px', background: '#111827', borderBottom: '1px solid #1f2937' },
-  timerBox: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700', width: '96px', textAlign: 'center' },
-  headerItem: { background: '#1f2937', padding: '8px 16px', borderRadius: '12px', fontSize: '1.1rem', fontWeight: '700' },
-  dishHeaderTitle: { fontSize: '1.2rem', fontWeight: '800', background: 'rgba(245, 158, 11, 0.15)', padding: '8px 20px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.35)', whiteSpace: 'nowrap' },
-  scoreBoard: { fontSize: '1.45rem', color: '#38bdf8', fontWeight: '900', background: 'rgba(56, 189, 248, 0.18)', padding: '10px 20px', borderRadius: '12px', border: '1px solid rgba(56, 189, 248, 0.35)', fontVariantNumeric: 'tabular-nums' },
-  activeLayout: { flex: 1, display: 'flex', overflow: 'hidden', padding: '12px', gap: '12px' },
-  kitchenFloor: { flex: 1, position: 'relative', background: 'radial-gradient(circle, #1e293b 0%, #0f172a 100%)', borderRadius: '18px', border: '2px dashed #334155', overflow: 'hidden' },
-  barrierLine: { position: 'absolute', left: '50%', top: 0, bottom: 0, width: '4px', background: 'rgba(236, 72, 153, 0.4)', transform: 'translateX(-50%)', borderStyle: 'dashed', borderColor: '#ec4899' },
-  achievementBanner: { position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', padding: '10px 24px', borderRadius: '14px', border: '2px solid', display: 'flex', alignItems: 'center', gap: '12px', zIndex: 20, boxShadow: '0 10px 25px rgba(0,0,0,0.6)' },
-  station: { position: 'absolute', transform: 'translate(-50%, -50%)', width: '90px', height: '90px', borderRadius: '22px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 30px rgba(0,0,0,0.6)', border: '2.5px solid rgba(255,255,255,0.3)' },
-  stationLabel: { fontSize: '0.7rem', fontWeight: '800', color: '#fff', marginTop: '3px', textShadow: '0 1px 4px rgba(0,0,0,0.9)', textAlign: 'center' },
-  stationItemBadge: { position: 'absolute', top: '-16px', right: '-10px', background: '#334155', borderRadius: '50%', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.15rem', border: '2.5px solid #fbbf24', boxShadow: '0 2px 8px rgba(0,0,0,0.5)' },
-  readyItemBadge: { position: 'absolute', top: '-18px', right: '-12px', background: '#10b981', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', border: '2.5px solid #fff', boxShadow: '0 0 16px rgba(16, 185, 129, 0.9)', animation: 'popScale 0.4s ease-out' },
-  minigameOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 },
-  minigameCard: { background: '#1e1b4b', border: '2.5px solid #fbbf24', padding: '35px', borderRadius: '28px', textAlign: 'center', width: '420px', boxShadow: '0 25px 50px rgba(0,0,0,0.9)' },
-  congratsCard: { background: '#1e1b4b', border: '2.5px solid #10b981', padding: '40px', borderRadius: '30px', textAlign: 'center', width: '480px', boxShadow: '0 30px 60px rgba(0,0,0,0.9)' },
-  miniTrackLarge: { width: '100%', height: '16px', background: '#0f172a', borderRadius: '8px', overflow: 'hidden', margin: '18px 0', border: '1.5px solid rgba(255,255,255,0.25)' },
-  miniFillLarge: { height: '100%', background: 'linear-gradient(90deg, #3b82f6, #10b981)' },
-  tapActionBtn: { width: '100%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.2rem', borderRadius: '14px', cursor: 'pointer', fontWeight: '800' },
-  tempBarContainer: { position: 'relative', width: '100%', height: '28px', background: '#0f172a', borderRadius: '14px', overflow: 'hidden', border: '1.5px solid rgba(255,255,255,0.25)', margin: '18px 0' },
-  tempGreenZone: { position: 'absolute', left: '40%', width: '25%', height: '100%', background: 'rgba(16, 185, 129, 0.45)', borderLeft: '2.5px solid #10b981', borderRight: '2.5px solid #10b981' },
-  tempIndicator: { position: 'absolute', top: 0, width: '8px', height: '100%', background: '#fff', transform: 'translateX(-50%)', boxShadow: '0 0 10px #fff' },
-  playerNode: { position: 'absolute', transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(15, 23, 42, 0.9)', padding: '8px 14px', borderRadius: '18px', transition: 'left 0.1s linear, top 0.1s linear', zIndex: 10 },
-  heldBubble: { position: 'absolute', top: '-34px', background: '#fff', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.35rem', boxShadow: '0 4px 12px rgba(0,0,0,0.6)', border: '2.5px solid #f59e0b' },
-  playerTag: { fontSize: '0.9rem', fontWeight: '800', color: '#f1f5f9', whiteSpace: 'nowrap' },
-  mobileControls: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 28px', background: '#111827', borderTop: '1px solid #1f2937' },
-  dpad: { display: 'grid', gridTemplateColumns: 'repeat(3, 48px)', gridTemplateRows: 'repeat(2, 48px)', gap: '6px' },
-  dpadBtn: { background: '#334155', border: 'none', borderRadius: '12px', fontSize: '1.35rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  actionBigBtn: { width: '74px', height: '74px', borderRadius: '50%', background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', border: 'none', fontSize: '2rem', cursor: 'pointer', boxShadow: '0 6px 18px rgba(245, 158, 11, 0.5)' }
+  menuBox: { background: 'rgba(30, 27, 75, 0.9)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,255,255,0.15)', padding: '40px', borderRadius: '28px', textAlign: 'center', width: '100%', maxWidth: '520px', boxShadow: '0 25px 50px rgba(0,0,0,0.6)' },
+  mainTitle: { fontSize: '2.4rem', fontWeight: '900', color: '#fbbf24', margin: '0 0 10px 0' },
+  subTitle: { fontSize: '1.1rem', color: '#cbd5e1', marginBottom: '30px' },
+  primaryBtn: { width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.2rem', borderRadius: '14px', cursor: 'pointer', fontWeight: '800' },
+  secondaryBtn: { width: '100%', background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)', color: '#fff', border: 'none', padding: '16px', fontSize: '1.2rem', borderRadius: '14px', cursor: 'pointer', fontWeight: '800' },
+  backBtn: { background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1rem', fontWeight: '700', cursor: 'pointer', marginTop: '16px' },
+  divider: { margin: '20px 0', position: 'relative', borderBottom: '1px solid rgba(255,255,255,0.15)' },
+  dividerText: { position: 'absolute', top: '-10px', left: '50%', transform: 'translateX(-50%)', background: '#1e1b4b', padding: '0 10px', fontSize: '0.85rem', color: '#94a3b8' },
+  input: { width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.2)', fontSize: '1.2rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.7)', color: '#fff' },
+  hostFullScreen: { display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh', padding: '24px', background: '#0f172a' },
+  hostHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', background: '#1e1b4b', borderRadius: '16px' },
+  codeBadge: { fontSize: '1.3rem', fontWeight: '800', color: '#fbbf24' },
+  copyBtn: { background: '#4338ca', border: 'none', color: '#fff', padding: '6px 10px', borderRadius: '8px', cursor: 'pointer', marginLeft: '10px' },
+  hostGrid: { flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', margin: '20px 0' },
+  panel: { background: '#1e1b4b', borderRadius: '16px', padding: '20px', overflowY: 'auto' },
+  playerItem: { background: '#0f172a', padding: '12px', borderRadius: '10px', marginBottom: '8px', fontWeight: '700' },
+  logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
+  gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden', background: 'linear-gradient(180deg, #38bdf8 0%, #bae6fd 60%, #86efac 60%)' },
+  cloud1: { position: 'absolute', top: '50px', left: '100px', fontSize: '3rem', animation: 'floatCloud 4s ease-in-out infinite' },
+  cloud2: { position: 'absolute', top: '80px', right: '150px', fontSize: '4rem', animation: 'floatCloud 6s ease-in-out infinite' },
+  platform: { position: 'absolute', background: '#15803d', border: '3px solid #166534', borderRadius: '8px', boxShadow: '0 6px 12px rgba(0,0,0,0.3)' },
+  ground: { position: 'absolute', bottom: 0, left: 0, width: '100%', height: '80px', background: '#166534', borderTop: '6px solid #22c55e' },
+  playerNode: { position: 'absolute', display: 'flex', flexDirection: 'column', alignItems: 'center', transition: 'top 0.05s linear, left 0.05s linear' },
+  tag: { background: 'rgba(0,0,0,0.6)', padding: '2px 8px', borderRadius: '6px', fontSize: '0.8rem', fontWeight: '800', whiteSpace: 'nowrap' }
 };
