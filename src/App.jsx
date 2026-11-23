@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.7-zellige";
+const APP_VERSION = "v12.8-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -216,7 +216,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.7 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.8 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -374,32 +374,34 @@ export default function App() {
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
         setScore(prev => prev + 50);
-        triggerAchievement("✅ Super coupe ! Animation en cours...", 'success', 2000);
         
-        // Keep cutting animation active for 1.5s, then throw item upward at an angle
+        // Immediately close overlay so player can watch animation and thrown item!
+        setActiveMinigame(null);
+        triggerAchievement("✅ Super coupe ! Regardez l'ingrédient s'envoler !", 'success', 2500);
+        
+        // Keep cutting animation active briefly, then throw item upward high above platform
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          // Spawn thrown item at station X floating in the world to be caught
           const thrownItem = {
             id: 'thrown_' + Date.now(),
-            x: stations.cuttingBoard.x + 40,
-            y: stations.cuttingBoard.offsetFromGround,
+            x: stations.cuttingBoard.x,
+            y: stations.cuttingBoard.offsetFromGround + 90, // Thrown higher up above platform
             type: activeMinigame.itemType,
             state: 'chopped'
           };
           setWorldItems(prev => [...prev, thrownItem]);
           itemsRef.current = [...itemsRef.current, thrownItem];
 
-          updateActiveStep(activeStepIndexRef.current + 1);
+          updateActiveStep(2); // Set step to 'cook' (index 2) so catching it works for cooking!
           triggerAchievement("🌟 Ingrédient coupé lancé ! Attrapez-le !", 'info', 3000);
-          setActiveMinigame(null);
-        }, 1500);
+        }, 1200);
 
       } else {
+        setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
         triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
@@ -408,14 +410,15 @@ export default function App() {
         updateHolding(null, 'raw');
         updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
-        setActiveMinigame(null);
       }
     } else if (activeMinigame.type === 'cook') {
       if (isGood && step && step.id === 'cook') {
         setScore(prev => prev + 50);
-        triggerAchievement("✅ Cuisson parfaite ! Bouillonnement en cours...", 'success', 2000);
 
-        // Keep pot boiling animation active for 1.5s, then throw cooked dish upward
+        // Immediately close overlay so player can watch boiling & thrown dish!
+        setActiveMinigame(null);
+        triggerAchievement("✅ Cuisson parfaite ! Regardez le plat s'envoler !", 'success', 2500);
+
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
           stationRef.current = updatedStations;
@@ -424,20 +427,20 @@ export default function App() {
 
           const thrownDish = {
             id: 'thrown_' + Date.now(),
-            x: stations.pot.x + 40,
-            y: stations.pot.offsetFromGround,
+            x: stations.pot.x,
+            y: stations.pot.offsetFromGround + 90, // Thrown higher up above platform
             type: '🍲',
             state: 'cooked'
           };
           setWorldItems(prev => [...prev, thrownDish]);
           itemsRef.current = [...itemsRef.current, thrownDish];
 
-          updateActiveStep(activeStepIndexRef.current + 1);
+          updateActiveStep(3); // Set step to 'serve' (index 3) so catching it works for serving!
           triggerAchievement("🌟 Plat cuit lancé ! Attrapez-le pour le servir !", 'info', 3000);
-          setActiveMinigame(null);
-        }, 1500);
+        }, 1200);
 
       } else {
+        setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
         triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
@@ -446,7 +449,6 @@ export default function App() {
         updateHolding(null, 'raw');
         updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
-        setActiveMinigame(null);
       }
     }
   };
@@ -615,7 +617,6 @@ export default function App() {
         const cleanedTarget = (step?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
 
         if (step && (step.id === 'pickup' || (step.id === 'cook' && pickedItem.state === 'chopped') || (step.id === 'serve' && pickedItem.state === 'cooked'))) {
-          // Remove item from world items list
           const nextItems = itemsRef.current.filter((_, i) => i !== pickedItemIndex);
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
@@ -623,7 +624,12 @@ export default function App() {
           const itemStateVal = pickedItem.state || 'raw';
           updateHolding(pickedItem.type, itemStateVal);
           triggerAchievement(`✅ Attrapé avec succès ! Prochaine étape active.`, 'success', 3500);
-          updateActiveStep(activeStepIndexRef.current + 1);
+          
+          if (activeStepIndexRef.current === 0) {
+            updateActiveStep(1); // after pickup, set to cut
+          } else if (activeStepIndexRef.current === 2) {
+            updateActiveStep(3); // after catching cooked dish, set to serve
+          }
         } else {
           setScore(prev => Math.max(0, prev - 20));
           triggerAchievement(`❌ Mauvais ingrédient attrapé ! -20 pts`, 'error', 3500);
@@ -960,7 +966,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.7)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.8)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
