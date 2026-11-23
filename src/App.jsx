@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.8-zellige";
+const APP_VERSION = "v12.9-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -76,17 +76,19 @@ const WORLDS_CONFIG = [
     name: "Monde 1 : Cuisine ensoleillée ☀️",
     bgStyle: { background: 'linear-gradient(180deg, #38bdf8 0%, #7dd3fc 65%, #bae6fd 100%)' },
     platforms: PLATFORMS_W1,
-    items: [{ id: 'item_1', x: 220, y: 130, type: '🍅' }],
+    items: [{ id: 'item_1', x: 220, type: '🍅', state: 'raw' }],
     stations: { cuttingBoard: { x: 600, offsetFromGround: 230 }, pot: { x: 1100, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
       imgUrl: "/tajine-de-poulet-aux-tomates-scaled.jpg",
       funFact: "Le tajine tire son nom du plat en terre cuite conique traditionnel qui permet une cuisson lente à l'étouffée.",
       steps: [
-        { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 600 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1100 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1880 }
+        { id: 'pickup', label: '1. Prendre une Tomate 🍅', targetItem: '🍅' },
+        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
+        { id: 'pickup_chopped', label: '3. Attraper la Tomate coupée 🍅' },
+        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
+        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
   },
@@ -95,17 +97,19 @@ const WORLDS_CONFIG = [
     name: "Monde 2 : Royaume Céleste 🌌",
     bgStyle: { background: 'linear-gradient(135deg, #090d16 0%, #1a103c 50%, #2e1065 100%)' },
     platforms: PLATFORMS_W2,
-    items: [{ id: 'item_w2_1', x: 780, y: 180, type: '🍄' }],
+    items: [{ id: 'item_w2_1', x: 780, type: '🍄', state: 'raw' }],
     stations: { cuttingBoard: { x: 500, offsetFromGround: 320 }, pot: { x: 1380, offsetFromGround: 140 }, counter: { x: 1700, offsetFromGround: 250 } },
     recipe: {
       name: "Couscous aux Champignons",
       imgUrl: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=300&q=80",
       funFact: "Le couscous est inscrit au patrimoine immatériel de l'UNESCO et symbolise le partage et la convivialité au Maghreb.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 780 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 500 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 1380 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1700 }
+        { id: 'pickup', label: '1. Prendre un Champignon 🍄', targetItem: '🍄' },
+        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
+        { id: 'pickup_chopped', label: '3. Attraper le Champignon coupé 🍄' },
+        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
+        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
   },
@@ -114,17 +118,19 @@ const WORLDS_CONFIG = [
     name: "Monde 3 : Volcan Infernal 🔥",
     bgStyle: { background: 'linear-gradient(180deg, #450a0a 0%, #7f1d1d 50%, #b91c1c 100%)' },
     platforms: PLATFORMS_W3,
-    items: [{ id: 'item_w3_1', x: 840, y: 350, type: '🌶️' }],
+    items: [{ id: 'item_w3_1', x: 840, type: '🌶️', state: 'raw' }],
     stations: { pot: { x: 520, offsetFromGround: 140 }, cuttingBoard: { x: 1160, offsetFromGround: 220 }, counter: { x: 1500, offsetFromGround: 160 } },
     recipe: {
       name: "Merguez Piquantes",
       imgUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=300&q=80",
       funFact: "Les merguez authentiques sont composées de viande de bœuf ou d'agneau embossée dans du boyau naturel et relevée au cumin et harissa.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 840 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 1160 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 520 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1500 }
+        { id: 'pickup', label: '1. Prendre un Piment 🌶️', targetItem: '🌶️' },
+        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
+        { id: 'pickup_chopped', label: '3. Attraper le Piment coupé 🌶️' },
+        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
+        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
   },
@@ -133,17 +139,19 @@ const WORLDS_CONFIG = [
     name: "Monde 4 : Vide Cosmique 🔮",
     bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
     platforms: PLATFORMS_W4,
-    items: [{ id: 'item_w4_1', x: 1260, y: 360, type: '🧄' }],
+    items: [{ id: 'item_w4_1', x: 1260, type: '🧄', state: 'raw' }],
     stations: { counter: { x: 580, offsetFromGround: 290 }, pot: { x: 920, offsetFromGround: 150 }, cuttingBoard: { x: 1600, offsetFromGround: 220 } },
     recipe: {
       name: "Pastilla au Poulet & Ail",
       imgUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=300&q=80",
       funFact: "La pastilla marie subtilement le salé et le sucré en combinant de la volaille épicée, des amandes et de la cannelle dans une pâte croustillante.",
       steps: [
-        { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 1260 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 1600 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 920 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 580 }
+        { id: 'pickup', label: "1. Prendre de l'Ail 🧄", targetItem: '🧄' },
+        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
+        { id: 'pickup_chopped', label: "3. Attraper l'Ail coupé 🧄" },
+        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
+        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
   },
@@ -152,17 +160,19 @@ const WORLDS_CONFIG = [
     name: "Monde 5 : Paradis Céleste ✨",
     bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
     platforms: PLATFORMS_W5,
-    items: [{ id: 'item_w5_1', x: 980, y: 190, type: '🍋' }],
+    items: [{ id: 'item_w5_1', x: 980, type: '🍋', state: 'raw' }],
     stations: { pot: { x: 220, offsetFromGround: 160 }, counter: { x: 1380, offsetFromGround: 270 }, cuttingBoard: { x: 600, offsetFromGround: 300 } },
     recipe: {
       name: "Poulet Citron Confit",
       imgUrl: "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=300&q=80",
       funFact: "Les citrons confits au sel sont un ingrédient signature de la gastronomie marocaine, apportant une acidité unique et parfumée.",
       steps: [
-        { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 980 },
-        { id: 'cut', label: 'Couper sur la Planche 🔪', targetMinigame: 'cut', targetX: 600 },
-        { id: 'cook', label: 'Cuire dans le Pot 🍲', targetMinigame: 'cook', targetX: 220 },
-        { id: 'serve', label: 'Servir au Comptoir 🛎️', targetAction: 'serve', targetX: 1380 }
+        { id: 'pickup', label: '1. Prendre un Citron 🍋', targetItem: '🍋' },
+        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
+        { id: 'pickup_chopped', label: '3. Attraper le Citron coupé 🍋' },
+        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
+        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
   }
@@ -216,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.8 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.9 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -370,35 +380,37 @@ export default function App() {
     const step = recipeRef.current.steps[activeStepIndexRef.current];
     const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
     const stations = activeWorldCfg.stations;
+    const floorY = viewportRef.current.h - GROUND_HEIGHT;
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
         setScore(prev => prev + 50);
-        
-        // Immediately close overlay so player can watch animation and thrown item!
         setActiveMinigame(null);
         triggerAchievement("✅ Super coupe ! Regardez l'ingrédient s'envoler !", 'success', 2500);
-        
-        // Keep cutting animation active briefly, then throw item upward high above platform
+
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          const cbPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
+          const cbPlatformTop = cbPlatform ? floorY - cbPlatform.offsetFromGround : floorY;
+
           const thrownItem = {
             id: 'thrown_' + Date.now(),
             x: stations.cuttingBoard.x,
-            y: stations.cuttingBoard.offsetFromGround + 90, // Thrown higher up above platform
+            customY: cbPlatformTop - 85, // Floating right above the platform
             type: activeMinigame.itemType,
             state: 'chopped'
           };
-          setWorldItems(prev => [...prev, thrownItem]);
-          itemsRef.current = [...itemsRef.current, thrownItem];
+          const nextItems = [...itemsRef.current, thrownItem];
+          setWorldItems(nextItems);
+          itemsRef.current = nextItems;
 
-          updateActiveStep(2); // Set step to 'cook' (index 2) so catching it works for cooking!
+          updateActiveStep(2); // Step 2: pickup_chopped
           triggerAchievement("🌟 Ingrédient coupé lancé ! Attrapez-le !", 'info', 3000);
-        }, 1200);
+        }, 1000);
 
       } else {
         setActiveMinigame(null);
@@ -414,8 +426,6 @@ export default function App() {
     } else if (activeMinigame.type === 'cook') {
       if (isGood && step && step.id === 'cook') {
         setScore(prev => prev + 50);
-
-        // Immediately close overlay so player can watch boiling & thrown dish!
         setActiveMinigame(null);
         triggerAchievement("✅ Cuisson parfaite ! Regardez le plat s'envoler !", 'success', 2500);
 
@@ -425,19 +435,23 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          const potPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
+          const potPlatformTop = potPlatform ? floorY - potPlatform.offsetFromGround : floorY;
+
           const thrownDish = {
             id: 'thrown_' + Date.now(),
             x: stations.pot.x,
-            y: stations.pot.offsetFromGround + 90, // Thrown higher up above platform
+            customY: potPlatformTop - 85, // Floating right above the platform
             type: '🍲',
             state: 'cooked'
           };
-          setWorldItems(prev => [...prev, thrownDish]);
-          itemsRef.current = [...itemsRef.current, thrownDish];
+          const nextItems = [...itemsRef.current, thrownDish];
+          setWorldItems(nextItems);
+          itemsRef.current = nextItems;
 
-          updateActiveStep(3); // Set step to 'serve' (index 3) so catching it works for serving!
+          updateActiveStep(4); // Step 4: pickup_cooked
           triggerAchievement("🌟 Plat cuit lancé ! Attrapez-le pour le servir !", 'info', 3000);
-        }, 1200);
+        }, 1000);
 
       } else {
         setActiveMinigame(null);
@@ -501,6 +515,7 @@ export default function App() {
     const curState = holdingStateRef.current;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
 
+    // 1. Serving at Counter
     if (Math.abs(px - stations.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
       if (curHolding && curState === 'cooked' && step && step.id === 'serve') {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
@@ -560,6 +575,7 @@ export default function App() {
       return;
     }
 
+    // 2. Cutting at Cutting Board
     if (Math.abs(px - stations.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
       if (curHolding && curState === 'raw') {
         if (step && step.id === 'cut') {
@@ -578,6 +594,7 @@ export default function App() {
       return;
     }
 
+    // 3. Cooking in Pot
     if (Math.abs(px - stations.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
       if (curHolding && curState === 'chopped') {
         if (step && step.id === 'cook') {
@@ -596,6 +613,7 @@ export default function App() {
       return;
     }
 
+    // 4. Picking up items from the world (Raw, Chopped, or Cooked)
     if (!curHolding) {
       let pickedItemIndex = -1;
       let pickedItem = null;
@@ -613,26 +631,25 @@ export default function App() {
       });
 
       if (pickedItem) {
-        const cleanedPicked = (pickedItem?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-        const cleanedTarget = (step?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
+        const isRawPickup = step && step.id === 'pickup' && pickedItem.state === 'raw';
+        const isChoppedPickup = step && step.id === 'pickup_chopped' && pickedItem.state === 'chopped';
+        const isCookedPickup = step && step.id === 'pickup_cooked' && pickedItem.state === 'cooked';
 
-        if (step && (step.id === 'pickup' || (step.id === 'cook' && pickedItem.state === 'chopped') || (step.id === 'serve' && pickedItem.state === 'cooked'))) {
+        if (isRawPickup || isChoppedPickup || isCookedPickup) {
           const nextItems = itemsRef.current.filter((_, i) => i !== pickedItemIndex);
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
           const itemStateVal = pickedItem.state || 'raw';
           updateHolding(pickedItem.type, itemStateVal);
-          triggerAchievement(`✅ Attrapé avec succès ! Prochaine étape active.`, 'success', 3500);
-          
-          if (activeStepIndexRef.current === 0) {
-            updateActiveStep(1); // after pickup, set to cut
-          } else if (activeStepIndexRef.current === 2) {
-            updateActiveStep(3); // after catching cooked dish, set to serve
-          }
+          triggerAchievement(`✅ Attrapé avec succès ! Prochaine étape.`, 'success', 3500);
+
+          if (isRawPickup) updateActiveStep(1); // Next: cut
+          else if (isChoppedPickup) updateActiveStep(3); // Next: cook
+          else if (isCookedPickup) updateActiveStep(5); // Next: serve
         } else {
           setScore(prev => Math.max(0, prev - 20));
-          triggerAchievement(`❌ Mauvais ingrédient attrapé ! -20 pts`, 'error', 3500);
+          triggerAchievement(`❌ Ce n'est pas le bon ingrédient ou la bonne étape ! -20 pts`, 'error', 3500);
         }
       }
     }
@@ -846,15 +863,11 @@ export default function App() {
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
-    const foundItem = worldItems.find(i => {
-      const cleanedI = (i?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-      const cleanedT = (currentStepObj?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-      return cleanedI === cleanedT;
-    });
+    const foundItem = worldItems.find(i => i.state === 'raw');
     targetWorldX = foundItem ? foundItem.x : 220;
-  } else if (currentStepObj.id === 'cut') {
+  } else if (currentStepObj.id === 'cut' || currentStepObj.id === 'pickup_chopped') {
     targetWorldX = stations.cuttingBoard.x;
-  } else if (currentStepObj.id === 'cook') {
+  } else if (currentStepObj.id === 'cook' || currentStepObj.id === 'pickup_cooked') {
     targetWorldX = stations.pot.x;
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = stations.counter.x;
@@ -966,7 +979,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.8)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.9)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1094,7 +1107,7 @@ export default function App() {
               const isCurrent = idx === activeStepIndex;
               const isDone = idx < activeStepIndex;
               return (
-                <div key={idx} style={{ fontSize: '0.85rem', fontWeight: '700', color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div key={idx} style={{ fontSize: '0.82rem', fontWeight: '700', color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span>{isDone ? '✅' : isCurrent ? '➡️' : '⏳'}</span>
                   <span style={{ textDecoration: isDone ? 'line-through' : 'none' }}>{step.label}</span>
                 </div>
@@ -1151,23 +1164,23 @@ export default function App() {
           )}
 
           <div style={{ ...styles.worldLayer, width: `${WORLD_WIDTH}px`, transform: `scale(${zoom}) translate(-${cameraX}px, -${cameraY}px)`, transformOrigin: 'top left' }}>
-            <div style={{ ...styles.cloud, left: '150px', top: '60px' }}>☁️</div>
-            <div style={{ ...styles.cloud, left: '620px', top: '90px' }}>☁️</div>
-            <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
-            <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
-            <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '150px', top: '40px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '620px', top: '70px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '1150px', top: '30px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '1750px', top: '65px' }}>☁️</div>
+            <div style={{ ...styles.cloud, left: '2150px', top: '45px' }}>☁️</div>
 
-            {/* --- THREE BACKGROUND BANNERS (zIndex: 2, behind platforms & players) --- */}
+            {/* --- UPPER BACKGROUND BANNERS (zIndex: 2, high up in background sky) --- */}
             
             {/* Background Banner 1: Food Picture ONLY (No Name on Top) */}
-            <div style={{ position: 'absolute', left: '320px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
+            <div style={{ position: 'absolute', left: '280px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={{ width: '100%', height: '140px', borderRadius: '10px', overflow: 'hidden' }}>
                 <img src={currentRecipe.imgUrl} alt={currentRecipe.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             </div>
 
             {/* Background Banner 2: Controls & Energy Guide */}
-            <div style={{ position: 'absolute', left: '720px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
+            <div style={{ position: 'absolute', left: '720px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
               <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', lineHeight: '1.4', marginTop: '6px' }}>
                 <strong>WASD / Flèches</strong> : Bouger & Sauter<br />
@@ -1176,7 +1189,7 @@ export default function App() {
             </div>
 
             {/* Background Banner 3: Fun Fact about current food */}
-            <div style={{ position: 'absolute', left: '1120px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
+            <div style={{ position: 'absolute', left: '1160px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
               <div style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.3', marginTop: '6px' }}>
                 {currentRecipe.funFact}
@@ -1234,17 +1247,20 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* Persistent World Ingredients */}
+            {/* Persistent World Ingredients & Thrown Items */}
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
-              const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
-              const cleanedItem = (item?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-              const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-              const isTargetItem = (currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget) || (item.state && item.state === (currentStepObj.id === 'cook' ? 'chopped' : currentStepObj.id === 'serve' ? 'cooked' : ''));
+              const defaultPlatformTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
+              const itemTop = item.customY !== undefined ? item.customY : defaultPlatformTop;
+
+              const isRawTarget = currentStepObj.id === 'pickup' && item.state === 'raw';
+              const isChoppedTarget = currentStepObj.id === 'pickup_chopped' && item.state === 'chopped';
+              const isCookedTarget = currentStepObj.id === 'pickup_cooked' && item.state === 'cooked';
+              const isTargetItem = isRawTarget || isChoppedTarget || isCookedTarget;
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
-                <div key={idx} style={{ position: 'absolute', left: `${item.x}px`, top: `${itemTop}px`, transform: 'translateX(-50%)' }}>
+                <div key={item.id || idx} style={{ position: 'absolute', left: `${item.x}px`, top: `${itemTop}px`, transform: 'translateX(-50%)' }}>
                   {isItemVisibleOnScreen && (
                     <div className="holding-arrow" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 12px #f59e0b' }}>▼</div>
                   )}
