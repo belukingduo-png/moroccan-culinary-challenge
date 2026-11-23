@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.5-zellige";
+const APP_VERSION = "v12.7-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -80,7 +80,7 @@ const WORLDS_CONFIG = [
     stations: { cuttingBoard: { x: 600, offsetFromGround: 230 }, pot: { x: 1100, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
-      imgUrl: "/tajine-de-poulet-aux-tomates-scaled.jpg", // 👈 Your custom local image!
+      imgUrl: "/tajine-de-poulet-aux-tomates-scaled.jpg",
       funFact: "Le tajine tire son nom du plat en terre cuite conique traditionnel qui permet une cuisson lente à l'étouffée.",
       steps: [
         { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
@@ -216,7 +216,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.5 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.7 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -368,21 +368,40 @@ export default function App() {
     const posVal = sliderPosRef.current;
     const isGood = posVal >= 30 && posVal <= 70;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
+    const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
+    const stations = activeWorldCfg.stations;
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
         setScore(prev => prev + 50);
-        triggerAchievement("✅ Super coupe ! Prochaine étape : Cuire dans le pot 🍲", 'success', 3500);
-        updateHolding(activeMinigame.itemType, 'chopped');
-        const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        updateActiveStep(activeStepIndexRef.current + 1);
-        setActiveMinigame(null);
+        triggerAchievement("✅ Super coupe ! Animation en cours...", 'success', 2000);
+        
+        // Keep cutting animation active for 1.5s, then throw item upward at an angle
+        setTimeout(() => {
+          const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+
+          // Spawn thrown item at station X floating in the world to be caught
+          const thrownItem = {
+            id: 'thrown_' + Date.now(),
+            x: stations.cuttingBoard.x + 40,
+            y: stations.cuttingBoard.offsetFromGround,
+            type: activeMinigame.itemType,
+            state: 'chopped'
+          };
+          setWorldItems(prev => [...prev, thrownItem]);
+          itemsRef.current = [...itemsRef.current, thrownItem];
+
+          updateActiveStep(activeStepIndexRef.current + 1);
+          triggerAchievement("🌟 Ingrédient coupé lancé ! Attrapez-le !", 'info', 3000);
+          setActiveMinigame(null);
+        }, 1500);
+
       } else {
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient)", 'error', 4000);
+        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -394,17 +413,33 @@ export default function App() {
     } else if (activeMinigame.type === 'cook') {
       if (isGood && step && step.id === 'cook') {
         setScore(prev => prev + 50);
-        triggerAchievement("✅ Cuisson parfaite ! Prochaine étape : Servir au comptoir 🛎️", 'success', 3500);
-        updateHolding('🍲', 'cooked');
-        const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        updateActiveStep(activeStepIndexRef.current + 1);
-        setActiveMinigame(null);
+        triggerAchievement("✅ Cuisson parfaite ! Bouillonnement en cours...", 'success', 2000);
+
+        // Keep pot boiling animation active for 1.5s, then throw cooked dish upward
+        setTimeout(() => {
+          const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+
+          const thrownDish = {
+            id: 'thrown_' + Date.now(),
+            x: stations.pot.x + 40,
+            y: stations.pot.offsetFromGround,
+            type: '🍲',
+            state: 'cooked'
+          };
+          setWorldItems(prev => [...prev, thrownDish]);
+          itemsRef.current = [...itemsRef.current, thrownDish];
+
+          updateActiveStep(activeStepIndexRef.current + 1);
+          triggerAchievement("🌟 Plat cuit lancé ! Attrapez-le pour le servir !", 'info', 3000);
+          setActiveMinigame(null);
+        }, 1500);
+
       } else {
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début (Prendre un ingrédient)", 'error', 4000);
+        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -560,8 +595,10 @@ export default function App() {
     }
 
     if (!curHolding) {
+      let pickedItemIndex = -1;
       let pickedItem = null;
-      itemsRef.current.forEach(item => {
+
+      itemsRef.current.forEach((item, idx) => {
         const xDist = Math.abs(px - item.x);
         const itemPlatform = activeWorldCfg.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
@@ -569,6 +606,7 @@ export default function App() {
 
         if (xDist < 60 && yDist < 60 && !pickedItem) {
           pickedItem = item;
+          pickedItemIndex = idx;
         }
       });
 
@@ -576,13 +614,19 @@ export default function App() {
         const cleanedPicked = (pickedItem?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
         const cleanedTarget = (step?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
 
-        if (step && step.id === 'pickup' && cleanedPicked === cleanedTarget) {
-          updateHolding(pickedItem.type, 'raw');
-          triggerAchievement("✅ Ingrédient correct ! Prochaine étape : Couper sur la planche 🔪", 'success', 3500);
+        if (step && (step.id === 'pickup' || (step.id === 'cook' && pickedItem.state === 'chopped') || (step.id === 'serve' && pickedItem.state === 'cooked'))) {
+          // Remove item from world items list
+          const nextItems = itemsRef.current.filter((_, i) => i !== pickedItemIndex);
+          setWorldItems(nextItems);
+          itemsRef.current = nextItems;
+
+          const itemStateVal = pickedItem.state || 'raw';
+          updateHolding(pickedItem.type, itemStateVal);
+          triggerAchievement(`✅ Attrapé avec succès ! Prochaine étape active.`, 'success', 3500);
           updateActiveStep(activeStepIndexRef.current + 1);
         } else {
           setScore(prev => Math.max(0, prev - 20));
-          triggerAchievement(`❌ Mauvais ingrédient (${pickedItem?.type || ''}) ! -20 pts (Il faut : ${step?.targetItem || ''})`, 'error', 3500);
+          triggerAchievement(`❌ Mauvais ingrédient attrapé ! -20 pts`, 'error', 3500);
         }
       }
     }
@@ -916,7 +960,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.5)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.7)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1107,18 +1151,17 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
 
-            {/* --- THREE REQUIRED BANNERS PLACED INSIDE THE MAP WORLD --- */}
+            {/* --- THREE BACKGROUND BANNERS (zIndex: 2, behind platforms & players) --- */}
             
-            {/* Map Banner 1: Real Photo of the Dish */}
-            <div style={{ position: 'absolute', left: '320px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
-              <div style={styles.bannerHeader}>🖼️ Plat: {currentRecipe.name}</div>
-              <div style={{ width: '100%', height: '110px', borderRadius: '8px', overflow: 'hidden', marginTop: '6px' }}>
+            {/* Background Banner 1: Food Picture ONLY (No Name on Top) */}
+            <div style={{ position: 'absolute', left: '320px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
+              <div style={{ width: '100%', height: '140px', borderRadius: '10px', overflow: 'hidden' }}>
                 <img src={currentRecipe.imgUrl} alt={currentRecipe.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             </div>
 
-            {/* Map Banner 2: Controls & Energy Guide */}
-            <div style={{ position: 'absolute', left: '720px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
+            {/* Background Banner 2: Controls & Energy Guide */}
+            <div style={{ position: 'absolute', left: '720px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
               <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', lineHeight: '1.4', marginTop: '6px' }}>
                 <strong>WASD / Flèches</strong> : Bouger & Sauter<br />
@@ -1126,15 +1169,15 @@ export default function App() {
               </div>
             </div>
 
-            {/* Map Banner 3: Fun Fact about current food */}
-            <div style={{ position: 'absolute', left: '1120px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
+            {/* Background Banner 3: Fun Fact about current food */}
+            <div style={{ position: 'absolute', left: '1120px', top: `${floorY - 220}px`, ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
               <div style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.3', marginTop: '6px' }}>
                 {currentRecipe.funFact}
               </div>
             </div>
 
-            {/* -------------------------------------------------------- */}
+            {/* ------------------------------------------------------------------ */}
 
             {worldConfig.platforms.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
@@ -1191,7 +1234,7 @@ export default function App() {
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
               const cleanedItem = (item?.type || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
               const cleanedTarget = (currentStepObj?.targetItem || '').replace(/[^\p{L}\p{N}\p{Emoji}]/gu, '').trim();
-              const isTargetItem = currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget;
+              const isTargetItem = (currentStepObj.id === 'pickup' && cleanedItem === cleanedTarget) || (item.state && item.state === (currentStepObj.id === 'cook' ? 'chopped' : currentStepObj.id === 'serve' ? 'cooked' : ''));
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
@@ -1264,7 +1307,7 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  inWorldBanner: { background: 'rgba(15, 23, 42, 0.92)', border: '2px solid rgba(251, 191, 36, 0.6)', borderRadius: '14px', padding: '12px', width: '240px', boxShadow: '0 10px 25px rgba(0,0,0,0.6)', zIndex: 15 },
+  inWorldBackgroundBanner: { background: 'rgba(15, 23, 42, 0.7)', border: '2px solid rgba(251, 191, 36, 0.4)', borderRadius: '14px', padding: '8px', width: '220px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 2 },
   bannerHeader: { fontSize: '0.85rem', fontWeight: '900', color: '#fbbf24', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '4px' },
   compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   compassRight: { position: 'fixed', right: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
