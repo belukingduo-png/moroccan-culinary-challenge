@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.9-zellige";
+const APP_VERSION = "v12.10-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -226,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.9 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.10 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -400,7 +400,7 @@ export default function App() {
           const thrownItem = {
             id: 'thrown_' + Date.now(),
             x: stations.cuttingBoard.x,
-            customY: cbPlatformTop - 85, // Floating right above the platform
+            landingY: cbPlatformTop, // lands right on platform level for easy catch
             type: activeMinigame.itemType,
             state: 'chopped'
           };
@@ -441,7 +441,7 @@ export default function App() {
           const thrownDish = {
             id: 'thrown_' + Date.now(),
             x: stations.pot.x,
-            customY: potPlatformTop - 85, // Floating right above the platform
+            landingY: potPlatformTop, // lands right on platform level for easy catch
             type: '🍲',
             state: 'cooked'
           };
@@ -621,10 +621,10 @@ export default function App() {
       itemsRef.current.forEach((item, idx) => {
         const xDist = Math.abs(px - item.x);
         const itemPlatform = activeWorldCfg.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
-        const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
+        const itemWorldY = item.landingY !== undefined ? item.landingY : (itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY);
         const yDist = Math.abs(py - itemWorldY);
 
-        if (xDist < 60 && yDist < 60 && !pickedItem) {
+        if (xDist < 70 && yDist < 70 && !pickedItem) {
           pickedItem = item;
           pickedItemIndex = idx;
         }
@@ -979,7 +979,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.9)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.10)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1251,7 +1251,7 @@ export default function App() {
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
               const defaultPlatformTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
-              const itemTop = item.customY !== undefined ? item.customY : defaultPlatformTop;
+              const itemTop = item.landingY !== undefined ? item.landingY - 34 : defaultPlatformTop;
 
               const isRawTarget = currentStepObj.id === 'pickup' && item.state === 'raw';
               const isChoppedTarget = currentStepObj.id === 'pickup_chopped' && item.state === 'chopped';
