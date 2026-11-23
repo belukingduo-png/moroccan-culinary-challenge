@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.3-zellige";
+const APP_VERSION = "v12.5-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -27,7 +27,6 @@ const WORLD_WIDTH = 2400;
 const GROUND_HEIGHT = 28;
 const HITBOX_HALF_W = 16;
 
-// Unique Platform Layouts for Each World with Vertical Climbing Challenges
 const PLATFORMS_W1 = [
   { x: 180, offsetFromGround: 130, w: 180, h: 24 },
   { x: 440, offsetFromGround: 230, w: 200, h: 24 },
@@ -81,6 +80,7 @@ const WORLDS_CONFIG = [
     stations: { cuttingBoard: { x: 600, offsetFromGround: 230 }, pot: { x: 1100, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
       name: "Tajine à la Tomate",
+      imgUrl: "/tajine-de-poulet-aux-tomates-scaled.jpg", // 👈 Your custom local image!
       funFact: "Le tajine tire son nom du plat en terre cuite conique traditionnel qui permet une cuisson lente à l'étouffée.",
       steps: [
         { id: 'pickup', label: 'Prendre une Tomate 🍅', targetItem: '🍅', targetX: 220 },
@@ -99,6 +99,7 @@ const WORLDS_CONFIG = [
     stations: { cuttingBoard: { x: 500, offsetFromGround: 320 }, pot: { x: 1380, offsetFromGround: 140 }, counter: { x: 1700, offsetFromGround: 250 } },
     recipe: {
       name: "Couscous aux Champignons",
+      imgUrl: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=300&q=80",
       funFact: "Le couscous est inscrit au patrimoine immatériel de l'UNESCO et symbolise le partage et la convivialité au Maghreb.",
       steps: [
         { id: 'pickup', label: 'Prendre un Champignon 🍄', targetItem: '🍄', targetX: 780 },
@@ -117,6 +118,7 @@ const WORLDS_CONFIG = [
     stations: { pot: { x: 520, offsetFromGround: 140 }, cuttingBoard: { x: 1160, offsetFromGround: 220 }, counter: { x: 1500, offsetFromGround: 160 } },
     recipe: {
       name: "Merguez Piquantes",
+      imgUrl: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=300&q=80",
       funFact: "Les merguez authentiques sont composées de viande de bœuf ou d'agneau embossée dans du boyau naturel et relevée au cumin et harissa.",
       steps: [
         { id: 'pickup', label: 'Prendre un Piment 🌶️', targetItem: '🌶️', targetX: 840 },
@@ -135,6 +137,7 @@ const WORLDS_CONFIG = [
     stations: { counter: { x: 580, offsetFromGround: 290 }, pot: { x: 920, offsetFromGround: 150 }, cuttingBoard: { x: 1600, offsetFromGround: 220 } },
     recipe: {
       name: "Pastilla au Poulet & Ail",
+      imgUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=300&q=80",
       funFact: "La pastilla marie subtilement le salé et le sucré en combinant de la volaille épicée, des amandes et de la cannelle dans une pâte croustillante.",
       steps: [
         { id: 'pickup', label: 'Prendre de l\'Ail 🧄', targetItem: '🧄', targetX: 1260 },
@@ -153,6 +156,7 @@ const WORLDS_CONFIG = [
     stations: { pot: { x: 220, offsetFromGround: 160 }, counter: { x: 1380, offsetFromGround: 270 }, cuttingBoard: { x: 600, offsetFromGround: 300 } },
     recipe: {
       name: "Poulet Citron Confit",
+      imgUrl: "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=300&q=80",
       funFact: "Les citrons confits au sel sont un ingrédient signature de la gastronomie marocaine, apportant une acidité unique et parfumée.",
       steps: [
         { id: 'pickup', label: 'Prendre un Citron 🍋', targetItem: '🍋', targetX: 980 },
@@ -212,10 +216,9 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.3 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.5 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
-  // Game completion timer & leaderboard state
   const [gameStartTime, setGameStartTime] = useState(null);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [isGameFinished, setIsGameFinished] = useState(false);
@@ -225,11 +228,9 @@ export default function App() {
     { name: 'BaguetteBoss', time: '2m 10s', score: 1500 }
   ]);
 
-  // Portal Transition State
   const [showPortal, setShowPortal] = useState(false);
   const [portalActive, setPortalActive] = useState(false);
 
-  // Achievement / Quest System State
   const [currentRecipe, setCurrentRecipe] = useState(worldConfig.recipe);
   const [activeStepIndex, setActiveStepIndex] = useState(0);
   
@@ -463,7 +464,6 @@ export default function App() {
     const curState = holdingStateRef.current;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
 
-    // 1. Serving Counter
     if (Math.abs(px - stations.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
       if (curHolding && curState === 'cooked' && step && step.id === 'serve') {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
@@ -472,7 +472,6 @@ export default function App() {
         updateHolding(null, 'raw');
         setScore(prev => prev + 300);
 
-        // Check if this was World 5 (Final World)
         if (currentWorldIndexRef.current >= WORLDS_CONFIG.length - 1) {
           const endTime = Date.now();
           const elapsedSec = Math.floor((endTime - gameStartTime) / 1000);
@@ -489,7 +488,6 @@ export default function App() {
 
         triggerAchievement("🎉 Plat servi avec succès ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
 
-        // Open Portal & Advance to Next World with Instant Spawn Reset to Start ($x = 140$)
         setPortalActive(true);
         setTimeout(() => { setShowPortal(true); }, 800);
 
@@ -504,7 +502,6 @@ export default function App() {
           updateCurrentRecipe(nextCfg.recipe);
           updateActiveStep(0);
 
-          // INSTANT TELEPORT BACK TO START POSITION ($x = 140$)
           const spawnFloor = viewportRef.current.h - GROUND_HEIGHT;
           posRef.current = { x: 140, y: spawnFloor };
           setPos({ x: 140, y: spawnFloor });
@@ -526,7 +523,6 @@ export default function App() {
       return;
     }
 
-    // 2. Cutting Board Station
     if (Math.abs(px - stations.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
       if (curHolding && curState === 'raw') {
         if (step && step.id === 'cut') {
@@ -545,7 +541,6 @@ export default function App() {
       return;
     }
 
-    // 3. Pot Station
     if (Math.abs(px - stations.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
       if (curHolding && curState === 'chopped') {
         if (step && step.id === 'cook') {
@@ -564,7 +559,6 @@ export default function App() {
       return;
     }
 
-    // 4. World Pickup
     if (!curHolding) {
       let pickedItem = null;
       itemsRef.current.forEach(item => {
@@ -799,7 +793,6 @@ export default function App() {
   const counterPlatform = worldConfig.platforms.find(p => p.offsetFromGround === stations.counter.offsetFromGround);
   const counterTop = counterPlatform ? floorY - counterPlatform.offsetFromGround - 52 : floorY - 60;
 
-  // Calculate target X position for guidance
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
@@ -923,7 +916,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.3)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.5)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -994,39 +987,6 @@ export default function App() {
             <span>🦘 Sauts: {jumpsLeft}/2</span>
             <span>🎒 En main: {holdingItem ? `${holdingItem} (${holdingState})` : 'Aucun'}</span>
             <span>🍲 Plats: {stationState.servedDishes}</span>
-          </div>
-
-          {/* THREE REQUIRED BANNERS IN EVERY MAP */}
-          <div style={styles.threeBannersContainer}>
-            {/* Banner 1: Food Recipe Preview */}
-            <div style={styles.bannerCard}>
-              <div style={styles.bannerHeader}>🖼️ Plat du Monde</div>
-              <div style={styles.bannerContent}>
-                <span style={{ fontSize: '1.8rem' }}>🍲</span>
-                <span style={{ fontSize: '0.9rem', fontWeight: '800', color: '#fbbf24' }}>{currentRecipe.name}</span>
-              </div>
-            </div>
-
-            {/* Banner 2: Controls & Energy Guide */}
-            <div style={styles.bannerCard}>
-              <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
-              <div style={styles.bannerContent}>
-                <span style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1' }}>
-                  <strong>WASD / Flèches</strong> : Bouger & Sauter<br />
-                  <strong>ESPACE</strong> : Prendre / Couper / Cuire / Servir
-                </span>
-              </div>
-            </div>
-
-            {/* Banner 3: Fun Fact About Food */}
-            <div style={styles.bannerCard}>
-              <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
-              <div style={styles.bannerContent}>
-                <span style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.2' }}>
-                  {currentRecipe.funFact}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Game Finished Victory Screen Modal & Leaderboard */}
@@ -1146,6 +1106,35 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1150px', top: '50px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '1750px', top: '85px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '55px' }}>☁️</div>
+
+            {/* --- THREE REQUIRED BANNERS PLACED INSIDE THE MAP WORLD --- */}
+            
+            {/* Map Banner 1: Real Photo of the Dish */}
+            <div style={{ position: 'absolute', left: '320px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
+              <div style={styles.bannerHeader}>🖼️ Plat: {currentRecipe.name}</div>
+              <div style={{ width: '100%', height: '110px', borderRadius: '8px', overflow: 'hidden', marginTop: '6px' }}>
+                <img src={currentRecipe.imgUrl} alt={currentRecipe.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            </div>
+
+            {/* Map Banner 2: Controls & Energy Guide */}
+            <div style={{ position: 'absolute', left: '720px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
+              <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
+              <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', lineHeight: '1.4', marginTop: '6px' }}>
+                <strong>WASD / Flèches</strong> : Bouger & Sauter<br />
+                <strong>ESPACE</strong> : Actions / Énergie
+              </div>
+            </div>
+
+            {/* Map Banner 3: Fun Fact about current food */}
+            <div style={{ position: 'absolute', left: '1120px', top: `${floorY - 240}px`, ...styles.inWorldBanner }}>
+              <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
+              <div style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.3', marginTop: '6px' }}>
+                {currentRecipe.funFact}
+              </div>
+            </div>
+
+            {/* -------------------------------------------------------- */}
 
             {worldConfig.platforms.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
@@ -1275,10 +1264,8 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
-  threeBannersContainer: { position: 'fixed', top: '70px', left: '20px', display: 'flex', gap: '12px', zIndex: 55, pointerEvents: 'none' },
-  bannerCard: { background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(251, 191, 36, 0.5)', borderRadius: '12px', padding: '10px 14px', width: '210px', boxShadow: '0 8px 20px rgba(0,0,0,0.5)' },
-  bannerHeader: { fontSize: '0.8rem', fontWeight: '900', color: '#fbbf24', marginBottom: '6px', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '4px' },
-  bannerContent: { display: 'flex', alignItems: 'center', gap: '10px' },
+  inWorldBanner: { background: 'rgba(15, 23, 42, 0.92)', border: '2px solid rgba(251, 191, 36, 0.6)', borderRadius: '14px', padding: '12px', width: '240px', boxShadow: '0 10px 25px rgba(0,0,0,0.6)', zIndex: 15 },
+  bannerHeader: { fontSize: '0.85rem', fontWeight: '900', color: '#fbbf24', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '4px' },
   compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   compassRight: { position: 'fixed', right: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
   touchControlsContainer: { position: 'fixed', bottom: '20px', left: '20px', right: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 60, pointerEvents: 'none' },
