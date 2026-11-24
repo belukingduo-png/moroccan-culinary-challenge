@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, onValue, update } from 'firebase/database';
+import { getDatabase, ref, set, onValue, update, remove } from 'firebase/database';
 
-const APP_VERSION = "v12.18-zellige-fix";
+const APP_VERSION = "v12.19-zellige-fix";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -166,10 +166,9 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting'); // 'waiting', 'cinematic', 'playing'
-  const [cinematicPlayed, setCinematicPlayed] = useState(false);
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.18 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.19 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -275,35 +274,32 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
-  // Safe Non-Looping Cinematic Intro Sequence
+  // Robust Non-Looping Cinematic Intro & Game Start Sequence
   useEffect(() => {
-    if (gameState === 'cinematic' && !cinematicPlayed) {
-      setCinematicPlayed(true);
+    if (gameState === 'cinematic') {
       const timer = setTimeout(() => {
         setGameState('playing');
-        if (!isHost) {
-          setGameStartTime(Date.now());
-          setCountdown(3);
-          const c1 = setTimeout(() => setCountdown(2), 1000);
-          const c2 = setTimeout(() => setCountdown(1), 2000);
-          const c3 = setTimeout(() => setCountdown('GO!'), 3000);
-          const c4 = setTimeout(() => {
-            setCountdown(null);
-            triggerAchievement(`Objectif 1v1 : ${recipeRef.current.steps[0].label}`, 'info', 4000);
-          }, 3700);
-          return () => {
-            clearTimeout(c1);
-            clearTimeout(c2);
-            clearTimeout(c3);
-            clearTimeout(c4);
-          };
-        }
+        setGameStartTime(Date.now());
+        setCountdown(3);
+        const c1 = setTimeout(() => setCountdown(2), 1000);
+        const c2 = setTimeout(() => setCountdown(1), 2000);
+        const c3 = setTimeout(() => setCountdown('GO!'), 3000);
+        const c4 = setTimeout(() => {
+          setCountdown(null);
+          triggerAchievement(`Objectif 1v1 : ${recipeRef.current.steps[0].label}`, 'info', 4000);
+        }, 3700);
+        return () => {
+          clearTimeout(c1);
+          clearTimeout(c2);
+          clearTimeout(c3);
+          clearTimeout(c4);
+        };
       }, 2600);
       return () => clearTimeout(timer);
     }
-  }, [gameState, cinematicPlayed, isHost]);
+  }, [gameState]);
 
-  // AI Bot Rival Autoplay Logic
+  // AI Bot Rival Autoplay Logic (Only active if bot exists in players list)
   useEffect(() => {
     if (!isHost && players['player_bot_rival'] && gameState === 'playing' && countdown === null && !isGameFinished) {
       const botInterval = setInterval(() => {
@@ -797,7 +793,16 @@ export default function App() {
         if (data.status === 'cinematic' && gameState === 'waiting') {
           setGameState('cinematic');
         }
-        setPlayers(data.players || {});
+        const updatedPlayers = data.players || {};
+        
+        // Automatic Rule: If 2 human players are present, remove the AI bot so only two players compete!
+        const humanPlayerIds = Object.keys(updatedPlayers).filter(id => !id.includes('bot'));
+        if (humanPlayerIds.length >= 2 && updatedPlayers['player_bot_rival']) {
+          remove(ref(db, `rooms/${roomCode}/players/player_bot_rival`));
+          delete updatedPlayers['player_bot_rival'];
+        }
+
+        setPlayers(updatedPlayers);
         if (data.stations) {
           setStationState(data.stations);
           stationRef.current = data.stations;
@@ -810,11 +815,12 @@ export default function App() {
 
   const startShift = () => {
     if (db && roomCode) {
-      const currentPlayers = Object.keys(players);
-      let updatedPlayers = { ...players };
-      if (currentPlayers.length <= 1) {
-        const botId = 'player_bot_rival';
-        updatedPlayers[botId] = {
+      const currentPlayers = { ...players };
+      const humanCount = Object.keys(currentPlayers).filter(id => !id.includes('bot')).length;
+      
+      // If only 1 player or solo host, add AI bot rival. If 2 human players, ensure bot is removed.
+      if (humanCount < 2) {
+        currentPlayers['player_bot_rival'] = {
           name: 'Chef Rival 🤖',
           x: 300,
           heightAboveGround: 0,
@@ -823,12 +829,12 @@ export default function App() {
           holding: null,
           worldIndex: 0
         };
+      } else if (currentPlayers['player_bot_rival']) {
+        delete currentPlayers['player_bot_rival'];
       }
 
-      update(ref(db, `rooms/${roomCode}`), {
-        status: 'cinematic',
-        players: updatedPlayers
-      });
+      set(ref(db, `rooms/${roomCode}/status`), 'cinematic');
+      set(ref(db, `rooms/${roomCode}/players`), currentPlayers);
     }
   };
 
@@ -856,8 +862,8 @@ export default function App() {
       const roomRef = ref(db, `rooms/${roomCode}/players`);
       onValue(roomRef, (snapshot) => {
         const pData = snapshot.val() || {};
-        const count = Object.keys(pData).length;
-        if (count >= 2 && !pData[myId]) {
+        const humanCount = Object.keys(pData).filter(id => !id.includes('bot')).length;
+        if (humanCount >= 2 && !pData[myId]) {
           alert("Désolé, ce salon 1v1 est déjà complet (2 joueurs maximum) !");
           return;
         }
@@ -1091,7 +1097,7 @@ export default function App() {
                 ))
               )}
               {Object.keys(players).length <= 1 && (
-                <p style={{ color: '#38bdf8', fontSize: '0.85rem', marginTop: '10px' }}>ℹ️ Si vous lancez seul, un Bot Rival 🤖 intelligent sera automatiquement ajouté !</p>
+                <p style={{ color: '#38bdf8', fontSize: '0.85rem', marginTop: '10px' }}>ℹ️ Si vous lancez seul, un Bot Rival 🤖 intelligent sera automatiquement ajouté. Si un 2ème joueur humain rejoint, le bot est automatiquement retiré !</p>
               )}
             </div>
             <div style={styles.panel}>
