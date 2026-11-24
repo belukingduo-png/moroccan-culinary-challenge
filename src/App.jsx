@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, remove } from 'firebase/database';
 
-const APP_VERSION = "v13.00-world1-multistep-fix";
+const APP_VERSION = "v13.01-world1-multistep-fix";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -376,25 +376,17 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeMinigame]);
 
-  const respawnWorldItems = (activeWorldCfg) => {
-    const freshItems = activeWorldCfg.items.map(item => ({ ...item, id: `${item.id}_${Date.now()}` }));
-    setWorldItems(freshItems);
-    itemsRef.current = freshItems;
-  };
-
   const resolveMinigame = () => {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
     const isGood = posVal >= 30 && posVal <= 70;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
-    const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
-    const stations = activeWorldCfg.stations;
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id.includes('cut')) {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Super coupe ! Progression en cours...", 'success', 2000);
+        triggerAchievement("✅ Super coupe ! Ingrédient prêt !", 'success', 2000);
 
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
@@ -402,15 +394,18 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          // Update holding state to chopped
+          updateHolding(activeMinigame.itemType, 'chopped');
+
           const nextStepIdx = activeStepIndexRef.current + 1;
           updateActiveStep(nextStepIdx);
-          triggerAchievement("🌟 Étape validée avec succès !", 'info', 3000);
+          triggerAchievement("🌟 Ingrédient coupé pris en main !", 'info', 3000);
         }, 1500);
 
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Mini-jeu raté ! -20 pts.", 'error', 3500);
+        triggerAchievement("❌ Coupe ratée ! -20 pts.", 'error', 3500);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -421,7 +416,7 @@ export default function App() {
       if (isGood && step && (step.id.includes('pot') || step.id.includes('cook'))) {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Cuisson parfaite ! Progression en cours...", 'success', 2000);
+        triggerAchievement("✅ Cuisson parfaite !", 'success', 2000);
 
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
@@ -429,9 +424,10 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          updateHolding('🍲', 'cooked');
           const nextStepIdx = activeStepIndexRef.current + 1;
           updateActiveStep(nextStepIdx);
-          triggerAchievement("🌟 Étape validée avec succès !", 'info', 3000);
+          triggerAchievement("🌟 Plat cuit prêt à servir !", 'info', 3000);
         }, 1500);
 
       } else {
@@ -455,7 +451,7 @@ export default function App() {
 
   const getRandomName = () => RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
 
-  const syncMyState = (newPos, floorY, currentAnim, isRight, carriedItem) => {
+  const syncMyState = (newPos, floorY, currentAnim, isRight, carriedItem, carriedState) => {
     if (db && roomCode && !isHost) {
       update(ref(db, `rooms/${roomCode}/players/${myId}`), {
         x: newPos.x,
@@ -463,7 +459,7 @@ export default function App() {
         name: playerName,
         anim: currentAnim,
         facingRight: isRight,
-        holding: carriedItem,
+        holding: carriedItem ? `${carriedItem} (${carriedState})` : null,
         worldIndex: currentWorldIndexRef.current
       });
     }
@@ -574,7 +570,7 @@ export default function App() {
 
     // 3. Cooking in Pot
     if (Math.abs(px - stations.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
-      if (step && (step.id.includes('pot') || step.id.includes('cook'))) {
+      if (step && (step.id.includes('pot') || step.id.includes('cook') || step.id.includes('spices'))) {
         updateHolding(null, 'raw');
         const updatedStations = { ...stationRef.current, potCooking: true };
         stationRef.current = updatedStations;
@@ -585,7 +581,7 @@ export default function App() {
       }
     }
 
-    // 4. Picking up items from the world or floating chicken in World 1
+    // 4. Picking up floating chicken in World 1
     if (currentWorldIndexRef.current === 0 && Math.abs(px - chickenPos.x) < 60 && Math.abs(py - chickenPos.y) < 60) {
       if (step && step.id === 'catch_chicken') {
         updateHolding('🍗', 'raw');
@@ -595,6 +591,7 @@ export default function App() {
       }
     }
 
+    // 5. Picking up items from the world
     if (!curHolding) {
       let pickedItemIndex = -1;
       let pickedItem = null;
@@ -744,7 +741,7 @@ export default function App() {
       setAnimState(currentAnim);
       setFacingRight(isRight);
 
-      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight, holdingItemRef.current);
+      syncMyState({ x: px, y: py }, floorY, currentAnim, isRight, holdingItemRef.current, holdingStateRef.current);
     }, 20);
 
     return () => clearInterval(interval);
@@ -863,7 +860,7 @@ export default function App() {
     targetWorldX = chickenPos.x;
   } else if (currentStepObj.id.includes('cut')) {
     targetWorldX = stations.cuttingBoard.x;
-  } else if (currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook')) {
+  } else if (currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook') || currentStepObj.id.includes('spices')) {
     targetWorldX = stations.pot.x;
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = stations.counter.x;
@@ -1234,7 +1231,7 @@ export default function App() {
             </div>
 
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
-              {(currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook')) && isTargetVisible && (
+              {(currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook') || currentStepObj.id.includes('spices')) && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
