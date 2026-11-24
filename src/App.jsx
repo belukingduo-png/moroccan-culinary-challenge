@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.17-zellige-1v1";
+const APP_VERSION = "v12.18-zellige-fix";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -166,17 +166,17 @@ export default function App() {
   });
 
   const [gameState, setGameState] = useState('waiting'); // 'waiting', 'cinematic', 'playing'
-  const [cinematicPhase, setCinematicPhase] = useState('p1'); // 'p1', 'vs', 'p2', 'done'
+  const [cinematicPlayed, setCinematicPlayed] = useState(false);
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.17 Ready (1v1 Duels)']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.18 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [isGameFinished, setIsGameFinished] = useState(false);
   const [winnerName, setWinnerName] = useState('');
-  const [showResultsTab, setShowResultsTab] = useState(false); // Step 1: winner result, Step 2: leaderboard
+  const [showResultsTab, setShowResultsTab] = useState(false);
   
   const [leaderboard, setLeaderboard] = useState([
     { name: 'Chef Saffron', time: '0m 52s', score: 900 },
@@ -275,14 +275,11 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
-  // Cinematic Intro Sequence (Runs Once Cleanly without looping)
+  // Safe Non-Looping Cinematic Intro Sequence
   useEffect(() => {
-    if (gameState === 'cinematic') {
-      setCinematicPhase('p1');
-      const t1 = setTimeout(() => setCinematicPhase('vs'), 1000);
-      const t2 = setTimeout(() => setCinematicPhase('p2'), 1800);
-      const t3 = setTimeout(() => {
-        setCinematicPhase('done');
+    if (gameState === 'cinematic' && !cinematicPlayed) {
+      setCinematicPlayed(true);
+      const timer = setTimeout(() => {
         setGameState('playing');
         if (!isHost) {
           setGameStartTime(Date.now());
@@ -302,14 +299,9 @@ export default function App() {
           };
         }
       }, 2600);
-
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-      };
+      return () => clearTimeout(timer);
     }
-  }, [gameState, isHost]);
+  }, [gameState, cinematicPlayed, isHost]);
 
   // AI Bot Rival Autoplay Logic
   useEffect(() => {
@@ -545,7 +537,6 @@ export default function App() {
           setIsGameFinished(true);
           setWinnerName(playerName || 'Chef 1v1');
 
-          // Step 1: Winner banner first, then show Leaderboard after 2.5s
           setTimeout(() => setShowResultsTab(true), 2500);
 
           setLeaderboard(prev => [...prev, { name: playerName || 'Chef 1v1', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
@@ -803,7 +794,9 @@ export default function App() {
     const unsubscribe = onValue(roomRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        setGameState(data.status || 'waiting');
+        if (data.status === 'cinematic' && gameState === 'waiting') {
+          setGameState('cinematic');
+        }
         setPlayers(data.players || {});
         if (data.stations) {
           setStationState(data.stations);
@@ -813,7 +806,7 @@ export default function App() {
       }
     });
     return () => unsubscribe();
-  }, [roomCode]);
+  }, [roomCode, gameState]);
 
   const startShift = () => {
     if (db && roomCode) {
@@ -1026,14 +1019,14 @@ export default function App() {
           100% { transform: translateX(0); opacity: 1; }
         }
         .cinematic-slide-left {
-          animation: slideInLeft 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: slideInLeft 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes slideInRight {
           0% { transform: translateX(150vw); opacity: 0; }
           100% { transform: translateX(0); opacity: 1; }
         }
         .cinematic-slide-right {
-          animation: slideInRight 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: slideInRight 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes vsSmash {
           0% { transform: scale(3.5); opacity: 0; }
@@ -1125,37 +1118,28 @@ export default function App() {
         </div>
       )}
 
-      {/* Cinematic Intro Overlay (Clean 2s Entry + Name Fade + VS Smash) */}
+      {/* Cinematic Intro Overlay */}
       {gameState === 'cinematic' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px', width: '100%', maxWidth: '900px', padding: '0 20px' }}>
             
-            {/* Player 1 Entry (Slide Left + Name Fade) */}
-            {(cinematicPhase === 'p1' || cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
-              <div className="cinematic-slide-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(30, 27, 75, 0.85)', border: '3px solid #38bdf8', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(56, 189, 248, 0.4)' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#38bdf8', marginBottom: '15px', animation: 'popCountdown 0.6s ease-out' }}>{p1Name}</div>
-                <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
-                  <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
-                </div>
+            <div className="cinematic-slide-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(30, 27, 75, 0.85)', border: '3px solid #38bdf8', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(56, 189, 248, 0.4)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#38bdf8', marginBottom: '15px' }}>{p1Name}</div>
+              <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
+                <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
               </div>
-            )}
+            </div>
 
-            {/* VS Stamp Smash into Center */}
-            {(cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
-              <div className="cinematic-vs" style={{ fontSize: '4.5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 30px #f59e0b, 0 0 60px #ef4444' }}>
-                VS
-              </div>
-            )}
+            <div className="cinematic-vs" style={{ fontSize: '4.5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 30px #f59e0b, 0 0 60px #ef4444' }}>
+              VS
+            </div>
 
-            {/* Player 2 / Bot Rival Entry */}
-            {(cinematicPhase === 'p2' || cinematicPhase === 'done') && (
-              <div className="cinematic-slide-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(75, 27, 27, 0.85)', border: '3px solid #ef4444', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(239, 68, 68, 0.4)' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444', marginBottom: '15px', animation: 'popCountdown 0.6s ease-out' }}>{p2Name}</div>
-                <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
-                  <ChefSprite anim="idle" facingRight={false} frameTick={frameTick} />
-                </div>
+            <div className="cinematic-slide-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(75, 27, 27, 0.85)', border: '3px solid #ef4444', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(239, 68, 68, 0.4)' }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444', marginBottom: '15px' }}>{p2Name}</div>
+              <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
+                <ChefSprite anim="idle" facingRight={false} frameTick={frameTick} />
               </div>
-            )}
+            </div>
 
           </div>
         </div>
@@ -1163,7 +1147,6 @@ export default function App() {
 
       {!isHost && gameState === 'playing' && (
         <div style={styles.gameContainer}>
-          {/* Top HUD Stats */}
           <div style={styles.hudBar}>
             <span>⭐ Score: {score}</span>
             <span>🌍 {worldConfig.name}</span>
@@ -1172,7 +1155,6 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}/3</span>
           </div>
 
-          {/* Game Finished Victory Screen Modal & Leaderboard (Results First, Leaderboard Second) */}
           {isGameFinished && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.94)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <div style={{ background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '28px', padding: '40px', width: '100%', maxWidth: '600px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
@@ -1206,7 +1188,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Off-Screen Pulsing Compass */}
           {isTargetToLeft && (
             <div style={styles.compassLeft} className="pulsing-compass-left">
               <span style={{ fontSize: '1.8rem' }}>⬅️ 🌟</span> Hors écran (À gauche)
@@ -1218,14 +1199,12 @@ export default function App() {
             </div>
           )}
 
-          {/* Achievement Popup Banner */}
           {achievementBanner.visible && (
             <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', background: achievementBanner.status === 'success' ? 'rgba(16, 185, 129, 0.95)' : achievementBanner.status === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)', color: '#fff', padding: '12px 24px', borderRadius: '16px', fontSize: '1.1rem', fontWeight: '900', zIndex: 100, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', animation: 'popCountdown 0.3s ease-out' }}>
               {achievementBanner.text}
             </div>
           )}
 
-          {/* Persistent Quest Tracker Widget */}
           <div style={{ position: 'fixed', top: '70px', right: '20px', background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(251, 191, 36, 0.4)', padding: '14px 18px', borderRadius: '14px', zIndex: 50, width: '270px', boxShadow: '0 10px 25px rgba(0,0,0,0.4)' }}>
             <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
               📜 {currentRecipe.name}
@@ -1242,7 +1221,6 @@ export default function App() {
             })}
           </div>
 
-          {/* Animated Portal Overlay Transition */}
           {showPortal && (
             <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(circle, rgba(147, 51, 234, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)', zIndex: 200, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <div className="animated-portal" style={{ width: '260px', height: '260px', borderRadius: '50%', background: 'conic-gradient(from 0deg, #fbbf24, #38bdf8, #ec4899, #10b981, #fbbf24)', boxShadow: '0 0 60px #fbbf24, inset 0 0 60px #38bdf8', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '5rem' }}>
@@ -1254,7 +1232,6 @@ export default function App() {
             </div>
           )}
 
-          {/* On-Screen Mobile Touch Controls */}
           <div style={styles.touchControlsContainer}>
             <div style={styles.touchDpad}>
               <button style={styles.touchBtn} onTouchStart={() => { keysPressed.current['touchLeft'] = true; }} onTouchEnd={() => { keysPressed.current['touchLeft'] = false; }} onMouseDown={() => { keysPressed.current['touchLeft'] = true; }} onMouseUp={() => { keysPressed.current['touchLeft'] = false; }} onMouseLeave={() => { keysPressed.current['touchLeft'] = false; }}>◀️</button>
@@ -1266,14 +1243,12 @@ export default function App() {
             </div>
           </div>
 
-          {/* Countdown Overlay */}
           {countdown !== null && (
             <div style={styles.countdownOverlay}>
               <div key={countdown} className="countdown-num" style={styles.countdownText}>{countdown}</div>
             </div>
           )}
 
-          {/* Cutting & Cooking Minigame Overlay */}
           {activeMinigame && (
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameBox}>
@@ -1297,14 +1272,12 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1750px', top: '65px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '45px' }}>☁️</div>
 
-            {/* Background Banner 1: Food Picture */}
             <div style={{ position: 'absolute', left: '280px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={{ width: '100%', height: '140px', borderRadius: '10px', overflow: 'hidden' }}>
                 <img src={currentRecipe.imgUrl} alt={currentRecipe.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             </div>
 
-            {/* Background Banner 2: Controls */}
             <div style={{ position: 'absolute', left: '720px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
               <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', lineHeight: '1.4', marginTop: '6px' }}>
@@ -1313,7 +1286,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Background Banner 3: Fun Fact */}
             <div style={{ position: 'absolute', left: '1160px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
               <div style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.3', marginTop: '6px' }}>
@@ -1326,7 +1298,6 @@ export default function App() {
               return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
-            {/* Cutting Board Station */}
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1346,7 +1317,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Station */}
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1359,7 +1329,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Serving Counter Station */}
             <div style={{ position: 'absolute', left: `${stations.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'serve' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1370,7 +1339,6 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* Persistent World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 15 && item.x <= p.x + p.w + 15);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
@@ -1395,7 +1363,6 @@ export default function App() {
 
             <div style={styles.ground} />
 
-            {/* Local Player Render */}
             <div style={{ ...styles.playerNode, left: `${pos.x}px`, top: `${pos.y}px` }}>
               {holdingItem && (
                 <div className="holding-arrow" style={styles.holdingIndicator}>▼ {holdingItem} ({holdingState})</div>
@@ -1404,11 +1371,10 @@ export default function App() {
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} isGhost={false} />
             </div>
 
-            {/* Remote Competitor Ghost Render (Only visible if in the EXACT SAME world) */}
             {Object.keys(players).filter(pid => pid !== myId).map(pid => {
               const p = players[pid];
               const pWorldIdx = p.worldIndex !== undefined ? p.worldIndex : 0;
-              if (pWorldIdx !== currentWorldIndex) return null; // Hide if in a different world!
+              if (pWorldIdx !== currentWorldIndex) return null;
 
               const px = p.x || 140;
               const py = floorY - (p.heightAboveGround || 0);
