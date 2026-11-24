@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.16-zellige-1v1";
+const APP_VERSION = "v12.17-zellige-1v1";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -169,12 +169,15 @@ export default function App() {
   const [cinematicPhase, setCinematicPhase] = useState('p1'); // 'p1', 'vs', 'p2', 'done'
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.16 Ready (1v1 Duels)']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.17 Ready (1v1 Duels)']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [isGameFinished, setIsGameFinished] = useState(false);
+  const [winnerName, setWinnerName] = useState('');
+  const [showResultsTab, setShowResultsTab] = useState(false); // Step 1: winner result, Step 2: leaderboard
+  
   const [leaderboard, setLeaderboard] = useState([
     { name: 'Chef Saffron', time: '0m 52s', score: 900 },
     { name: 'ZelligeMaster', time: '1m 15s', score: 900 }
@@ -272,12 +275,12 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
-  // Cinematic Intro Sequence when gameState becomes 'cinematic'
+  // Cinematic Intro Sequence (Runs Once Cleanly without looping)
   useEffect(() => {
     if (gameState === 'cinematic') {
       setCinematicPhase('p1');
-      const t1 = setTimeout(() => setCinematicPhase('vs'), 1100);
-      const t2 = setTimeout(() => setCinematicPhase('p2'), 2200);
+      const t1 = setTimeout(() => setCinematicPhase('vs'), 1000);
+      const t2 = setTimeout(() => setCinematicPhase('p2'), 1800);
       const t3 = setTimeout(() => {
         setCinematicPhase('done');
         setGameState('playing');
@@ -298,7 +301,7 @@ export default function App() {
             clearTimeout(c4);
           };
         }
-      }, 3400);
+      }, 2600);
 
       return () => {
         clearTimeout(t1);
@@ -307,6 +310,37 @@ export default function App() {
       };
     }
   }, [gameState, isHost]);
+
+  // AI Bot Rival Autoplay Logic
+  useEffect(() => {
+    if (!isHost && players['player_bot_rival'] && gameState === 'playing' && countdown === null && !isGameFinished) {
+      const botInterval = setInterval(() => {
+        const bot = players['player_bot_rival'];
+        if (!bot) return;
+
+        const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
+        const stations = activeWorldCfg.stations;
+        const targetX = stations.counter.x - 40;
+        
+        let bx = bot.x || 300;
+        if (bx < targetX) {
+          bx += 6;
+        } else if (bx > targetX) {
+          bx -= 6;
+        }
+
+        update(ref(db, `rooms/${roomCode}/players/player_bot_rival`), {
+          x: bx,
+          heightAboveGround: 0,
+          anim: 'run',
+          facingRight: bx >= (bot.x || 300),
+          holding: '🍲'
+        });
+      }, 100);
+
+      return () => clearInterval(botInterval);
+    }
+  }, [isHost, players, gameState, countdown, isGameFinished, roomCode]);
 
   useEffect(() => {
     if (!activeMinigame) return;
@@ -459,7 +493,8 @@ export default function App() {
         name: playerName,
         anim: currentAnim,
         facingRight: isRight,
-        holding: carriedItem
+        holding: carriedItem,
+        worldIndex: currentWorldIndexRef.current
       });
     }
   };
@@ -508,6 +543,10 @@ export default function App() {
           const timeStr = `${mins}m ${secs}s`;
           setTotalElapsedTime(timeStr);
           setIsGameFinished(true);
+          setWinnerName(playerName || 'Chef 1v1');
+
+          // Step 1: Winner banner first, then show Leaderboard after 2.5s
+          setTimeout(() => setShowResultsTab(true), 2500);
 
           setLeaderboard(prev => [...prev, { name: playerName || 'Chef 1v1', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
           triggerAchievement("🏆 VICTOIRE DU DUEL 1v1 ! Vous avez écrasé votre rival !", 'success', 6000);
@@ -778,7 +817,6 @@ export default function App() {
 
   const startShift = () => {
     if (db && roomCode) {
-      // If only 1 player joined, automatically add an AI Bot Rival into slot 2 for the 1v1!
       const currentPlayers = Object.keys(players);
       let updatedPlayers = { ...players };
       if (currentPlayers.length <= 1) {
@@ -789,7 +827,8 @@ export default function App() {
           heightAboveGround: 0,
           anim: 'idle',
           facingRight: true,
-          holding: null
+          holding: null,
+          worldIndex: 0
         };
       }
 
@@ -820,7 +859,6 @@ export default function App() {
     e.preventDefault();
     if (!roomCode) return;
     
-    // Check player count restriction (max 2 players in 1v1)
     if (db) {
       const roomRef = ref(db, `rooms/${roomCode}/players`);
       onValue(roomRef, (snapshot) => {
@@ -848,7 +886,8 @@ export default function App() {
         heightAboveGround: 0,
         anim: 'idle',
         facingRight: true,
-        holding: null
+        holding: null,
+        worldIndex: 0
       });
     }
   };
@@ -892,7 +931,6 @@ export default function App() {
   const isTargetToLeft = !isTargetVisible && targetWorldX < cameraX;
   const isTargetToRight = !isTargetVisible && targetWorldX > cameraX + viewWidthWorld;
 
-  // Identify Player 1 and Player 2 for Cinematic
   const playerIds = Object.keys(players);
   const p1Id = playerIds[0] || myId;
   const p2Id = playerIds[1] || 'player_bot_rival';
@@ -988,22 +1026,22 @@ export default function App() {
           100% { transform: translateX(0); opacity: 1; }
         }
         .cinematic-slide-left {
-          animation: slideInLeft 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: slideInLeft 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes slideInRight {
           0% { transform: translateX(150vw); opacity: 0; }
           100% { transform: translateX(0); opacity: 1; }
         }
         .cinematic-slide-right {
-          animation: slideInRight 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: slideInRight 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
-        @keyframes vsPulse {
-          0% { transform: scale(0.2); opacity: 0; }
-          60% { transform: scale(1.3); opacity: 1; }
+        @keyframes vsSmash {
+          0% { transform: scale(3.5); opacity: 0; }
+          60% { transform: scale(0.9); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
         .cinematic-vs {
-          animation: vsPulse 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: vsSmash 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
       `}</style>
 
@@ -1055,12 +1093,12 @@ export default function App() {
               {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs (Solo ou 1v1)...</p> : (
                 Object.keys(players).map((id, idx) => (
                   <div key={id} style={styles.playerItem}>
-                    <span>👨‍🍳 Slot {idx + 1}: {players[id].name}</span>
+                    <span>👨‍🍳 Slot {idx + 1}: {players[id].name} (Monde {(players[id].worldIndex || 0) + 1})</span>
                   </div>
                 ))
               )}
               {Object.keys(players).length <= 1 && (
-                <p style={{ color: '#38bdf8', fontSize: '0.85rem', marginTop: '10px' }}>ℹ️ Si vous lancez seul, un Bot Rival 🤖 sera automatiquement ajouté !</p>
+                <p style={{ color: '#38bdf8', fontSize: '0.85rem', marginTop: '10px' }}>ℹ️ Si vous lancez seul, un Bot Rival 🤖 intelligent sera automatiquement ajouté !</p>
               )}
             </div>
             <div style={styles.panel}>
@@ -1087,22 +1125,22 @@ export default function App() {
         </div>
       )}
 
-      {/* Cinematic Intro Overlay */}
+      {/* Cinematic Intro Overlay (Clean 2s Entry + Name Fade + VS Smash) */}
       {gameState === 'cinematic' && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px', width: '100%', maxWidth: '900px', padding: '0 20px' }}>
             
-            {/* Player 1 Entry */}
+            {/* Player 1 Entry (Slide Left + Name Fade) */}
             {(cinematicPhase === 'p1' || cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
               <div className="cinematic-slide-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(30, 27, 75, 0.85)', border: '3px solid #38bdf8', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(56, 189, 248, 0.4)' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#38bdf8', marginBottom: '15px' }}>{p1Name}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#38bdf8', marginBottom: '15px', animation: 'popCountdown 0.6s ease-out' }}>{p1Name}</div>
                 <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
                   <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
                 </div>
               </div>
             )}
 
-            {/* VS Stamp */}
+            {/* VS Stamp Smash into Center */}
             {(cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
               <div className="cinematic-vs" style={{ fontSize: '4.5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 30px #f59e0b, 0 0 60px #ef4444' }}>
                 VS
@@ -1112,7 +1150,7 @@ export default function App() {
             {/* Player 2 / Bot Rival Entry */}
             {(cinematicPhase === 'p2' || cinematicPhase === 'done') && (
               <div className="cinematic-slide-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(75, 27, 27, 0.85)', border: '3px solid #ef4444', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(239, 68, 68, 0.4)' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444', marginBottom: '15px' }}>{p2Name}</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444', marginBottom: '15px', animation: 'popCountdown 0.6s ease-out' }}>{p2Name}</div>
                 <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
                   <ChefSprite anim="idle" facingRight={false} frameTick={frameTick} />
                 </div>
@@ -1134,29 +1172,36 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}/3</span>
           </div>
 
-          {/* Game Finished Victory Screen Modal & Leaderboard */}
+          {/* Game Finished Victory Screen Modal & Leaderboard (Results First, Leaderboard Second) */}
           {isGameFinished && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.94)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <div style={{ background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '28px', padding: '40px', width: '100%', maxWidth: '600px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
-                <h1 style={{ color: '#fbbf24', fontSize: '2.5rem', fontWeight: '900', margin: '0 0 10px 0' }}>🏆 VICTOIRE DU DUEL 1v1 ! 🏆</h1>
-                <p style={{ color: '#cbd5e1', fontSize: '1.2rem', marginBottom: '20px' }}>Vous avez vaincu votre rival sur tous les 3 mondes !</p>
                 
-                <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '16px', marginBottom: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <p style={{ fontSize: '1.1rem', color: '#38bdf8', fontWeight: '800', margin: '5px 0' }}>⏱️ Temps total du duel : {totalElapsedTime}</p>
-                  <p style={{ fontSize: '1.1rem', color: '#34d399', fontWeight: '800', margin: '5px 0' }}>⭐ Score Final : {score} pts</p>
-                </div>
-
-                <h3 style={{ color: '#fbbf24', marginBottom: '12px' }}>📊 Classement 1v1 (Leaderboard)</h3>
-                <div style={{ maxHeight: '180px', overflowY: 'auto', background: '#0f172a', borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
-                  {leaderboard.map((entry, idx) => (
-                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: '700', fontSize: '0.95rem' }}>
-                      <span>#{idx + 1} 👨‍🍳 {entry.name}</span>
-                      <span style={{ color: '#fbbf24' }}>{entry.time} ({entry.score} pts)</span>
+                {!showResultsTab ? (
+                  <div style={{ animation: 'popCountdown 0.5s ease-out' }}>
+                    <h1 style={{ color: '#fbbf24', fontSize: '2.5rem', fontWeight: '900', margin: '0 0 15px 0' }}>🏆 VICTOIRE ! 🏆</h1>
+                    <p style={{ color: '#38bdf8', fontSize: '1.4rem', fontWeight: '800', marginBottom: '20px' }}>Le vainqueur de ce duel 1v1 est : <span style={{ color: '#34d399' }}>{winnerName}</span> !</p>
+                    <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '16px', marginBottom: '20px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <p style={{ fontSize: '1.1rem', color: '#cbd5e1', fontWeight: '700', margin: '5px 0' }}>⏱️ Temps total : {totalElapsedTime}</p>
+                      <p style={{ fontSize: '1.1rem', color: '#fbbf24', fontWeight: '700', margin: '5px 0' }}>⭐ Score Final : {score} pts</p>
                     </div>
-                  ))}
-                </div>
+                    <button onClick={() => setShowResultsTab(true)} style={styles.secondaryBtn}>Voir le Classement Global 📊</button>
+                  </div>
+                ) : (
+                  <div style={{ animation: 'popCountdown 0.4s ease-out' }}>
+                    <h2 style={{ color: '#fbbf24', marginBottom: '15px' }}>📊 Classement Général 1v1 (Leaderboard)</h2>
+                    <div style={{ maxHeight: '220px', overflowY: 'auto', background: '#0f172a', borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
+                      {leaderboard.map((entry, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: '700', fontSize: '0.95rem' }}>
+                          <span>#{idx + 1} 👨‍🍳 {entry.name}</span>
+                          <span style={{ color: '#fbbf24' }}>{entry.time} ({entry.score} pts)</span>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => window.location.reload()} style={styles.primaryBtn}>🔄 Nouveau Duel 1v1</button>
+                  </div>
+                )}
 
-                <button onClick={() => window.location.reload()} style={styles.primaryBtn}>🔄 Nouveau Duel 1v1</button>
               </div>
             </div>
           )}
@@ -1252,16 +1297,14 @@ export default function App() {
             <div style={{ ...styles.cloud, left: '1750px', top: '65px' }}>☁️</div>
             <div style={{ ...styles.cloud, left: '2150px', top: '45px' }}>☁️</div>
 
-            {/* --- UPPER BACKGROUND BANNERS (zIndex: 2, high up in background sky) --- */}
-            
-            {/* Background Banner 1: Food Picture ONLY (No Name on Top) */}
+            {/* Background Banner 1: Food Picture */}
             <div style={{ position: 'absolute', left: '280px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={{ width: '100%', height: '140px', borderRadius: '10px', overflow: 'hidden' }}>
                 <img src={currentRecipe.imgUrl} alt={currentRecipe.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               </div>
             </div>
 
-            {/* Background Banner 2: Controls & Energy Guide */}
+            {/* Background Banner 2: Controls */}
             <div style={{ position: 'absolute', left: '720px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>🎮 Contrôles & Énergie</div>
               <div style={{ fontSize: '0.82rem', fontWeight: '700', color: '#cbd5e1', lineHeight: '1.4', marginTop: '6px' }}>
@@ -1270,7 +1313,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Background Banner 3: Fun Fact about current food */}
+            {/* Background Banner 3: Fun Fact */}
             <div style={{ position: 'absolute', left: '1160px', top: '80px', ...styles.inWorldBackgroundBanner }}>
               <div style={styles.bannerHeader}>💡 Le Saviez-Vous ?</div>
               <div style={{ fontSize: '0.80rem', fontWeight: '600', color: '#38bdf8', lineHeight: '1.3', marginTop: '6px' }}>
@@ -1278,14 +1321,12 @@ export default function App() {
               </div>
             </div>
 
-            {/* ------------------------------------------------------------------ */}
-
             {worldConfig.platforms.map((p, idx) => {
               const platTop = floorY - p.offsetFromGround;
               return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
-            {/* Cutting Board Station on Platform */}
+            {/* Cutting Board Station */}
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cut' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1305,7 +1346,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Cooking Pot Station on Platform */}
+            {/* Cooking Pot Station */}
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'cook' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1318,7 +1359,7 @@ export default function App() {
               </div>
             </div>
 
-            {/* Serving Counter Station on Platform */}
+            {/* Serving Counter Station */}
             <div style={{ position: 'absolute', left: `${stations.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
               {currentStepObj.id === 'serve' && isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
@@ -1329,7 +1370,7 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* Persistent World Ingredients & Output Items */}
+            {/* Persistent World Ingredients */}
             {worldItems.map((item, idx) => {
               const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 15 && item.x <= p.x + p.w + 15);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
@@ -1363,9 +1404,12 @@ export default function App() {
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} isGhost={false} />
             </div>
 
-            {/* Remote Competitor Ghost Render (Rival) */}
+            {/* Remote Competitor Ghost Render (Only visible if in the EXACT SAME world) */}
             {Object.keys(players).filter(pid => pid !== myId).map(pid => {
               const p = players[pid];
+              const pWorldIdx = p.worldIndex !== undefined ? p.worldIndex : 0;
+              if (pWorldIdx !== currentWorldIndex) return null; // Hide if in a different world!
+
               const px = p.x || 140;
               const py = floorY - (p.heightAboveGround || 0);
               const pAnim = p.anim || 'idle';
