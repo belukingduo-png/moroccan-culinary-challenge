@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.11-zellige";
+const APP_VERSION = "v12.12-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -226,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.11 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.12 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -387,16 +387,25 @@ export default function App() {
         setActiveMinigame(null);
         triggerAchievement("✅ Super coupe ! Découpe en cours (1.5s)...", 'success', 2000);
 
-        // Continue cutting animation for 1.5s, then place chopped item cleanly beside cutting board on the platform
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          // Safe placement on platform matching station X
+          const cbPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
+          let safeX = stations.cuttingBoard.x + 50;
+          if (cbPlatform) {
+            if (safeX > cbPlatform.x + cbPlatform.w - 20) {
+              safeX = stations.cuttingBoard.x - 50;
+            }
+            safeX = Math.max(cbPlatform.x + 15, Math.min(cbPlatform.x + cbPlatform.w - 15, safeX));
+          }
+
           const readyItem = {
             id: 'chopped_' + Date.now(),
-            x: stations.cuttingBoard.x - 52, // sits right next to the board on the same platform
+            x: safeX,
             type: activeMinigame.itemType,
             state: 'chopped'
           };
@@ -425,16 +434,25 @@ export default function App() {
         setActiveMinigame(null);
         triggerAchievement("✅ Cuisson parfaite ! Mijotage en cours (1.5s)...", 'success', 2000);
 
-        // Continue boiling animation for 1.5s, then place cooked dish cleanly beside pot on the platform
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
+          // Safe placement on platform matching station X
+          const potPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
+          let safeX = stations.pot.x + 50;
+          if (potPlatform) {
+            if (safeX > potPlatform.x + potPlatform.w - 20) {
+              safeX = stations.pot.x - 50;
+            }
+            safeX = Math.max(potPlatform.x + 15, Math.min(potPlatform.x + potPlatform.w - 15, safeX));
+          }
+
           const readyDish = {
             id: 'cooked_' + Date.now(),
-            x: stations.pot.x - 52, // sits right next to the pot on the same platform
+            x: safeX,
             type: '🍲',
             state: 'cooked'
           };
@@ -613,11 +631,11 @@ export default function App() {
 
       itemsRef.current.forEach((item, idx) => {
         const xDist = Math.abs(px - item.x);
-        const itemPlatform = activeWorldCfg.platforms.find(p => item.x >= p.x - 10 && item.x <= p.x + p.w + 10);
+        const itemPlatform = activeWorldCfg.platforms.find(p => item.x >= p.x - 15 && item.x <= p.x + p.w + 15);
         const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
         const yDist = Math.abs(py - itemWorldY);
 
-        if (xDist < 75 && yDist < 75 && !pickedItem) {
+        if (xDist < 80 && yDist < 80 && !pickedItem) {
           pickedItem = item;
           pickedItemIndex = idx;
         }
@@ -862,12 +880,12 @@ export default function App() {
     targetWorldX = stations.cuttingBoard.x;
   } else if (currentStepObj.id === 'pickup_chopped') {
     const foundChopped = worldItems.find(i => i.state === 'chopped');
-    targetWorldX = foundChopped ? foundChopped.x : stations.cuttingBoard.x - 52;
+    targetWorldX = foundChopped ? foundChopped.x : stations.cuttingBoard.x + 50;
   } else if (currentStepObj.id === 'cook') {
     targetWorldX = stations.pot.x;
   } else if (currentStepObj.id === 'pickup_cooked') {
     const foundCooked = worldItems.find(i => i.state === 'cooked');
-    targetWorldX = foundCooked ? foundCooked.x : stations.pot.x - 52;
+    targetWorldX = foundCooked ? foundCooked.x : stations.pot.x + 50;
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = stations.counter.x;
   }
@@ -978,7 +996,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.11)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.12)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1248,7 +1266,7 @@ export default function App() {
 
             {/* Persistent World Ingredients & Output Items */}
             {worldItems.map((item, idx) => {
-              const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 10 && item.x <= p.x + p.w + 10);
+              const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 15 && item.x <= p.x + p.w + 15);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
 
               const isRawTarget = currentStepObj.id === 'pickup' && item.state === 'raw';
