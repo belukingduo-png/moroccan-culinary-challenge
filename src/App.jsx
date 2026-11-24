@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.14-zellige";
+const APP_VERSION = "v12.16-zellige-1v1";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -52,22 +52,6 @@ const PLATFORMS_W3 = [
   { x: 840, offsetFromGround: 350, w: 150, h: 24 },
   { x: 1160, offsetFromGround: 220, w: 210, h: 24 },
   { x: 1500, offsetFromGround: 160, w: 230, h: 24 }
-];
-
-const PLATFORMS_W4 = [
-  { x: 240, offsetFromGround: 180, w: 180, h: 24 },
-  { x: 580, offsetFromGround: 290, w: 190, h: 24 },
-  { x: 920, offsetFromGround: 150, w: 200, h: 24 },
-  { x: 1260, offsetFromGround: 360, w: 160, h: 24 },
-  { x: 1600, offsetFromGround: 220, w: 200, h: 24 }
-];
-
-const PLATFORMS_W5 = [
-  { x: 220, offsetFromGround: 160, w: 220, h: 24 },
-  { x: 600, offsetFromGround: 300, w: 180, h: 24 },
-  { x: 980, offsetFromGround: 190, w: 230, h: 24 },
-  { x: 1380, offsetFromGround: 270, w: 200, h: 24 },
-  { x: 1750, offsetFromGround: 150, w: 220, h: 24 }
 ];
 
 const WORLDS_CONFIG = [
@@ -133,48 +117,6 @@ const WORLDS_CONFIG = [
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
-  },
-  {
-    id: 3,
-    name: "Monde 4 : Vide Cosmique 🔮",
-    bgStyle: { background: 'linear-gradient(135deg, #2e1065 0%, #581c87 50%, #1e1b4b 100%)' },
-    platforms: PLATFORMS_W4,
-    items: [{ id: 'item_w4_1', x: 1260, type: '🧄', state: 'raw' }],
-    stations: { counter: { x: 580, offsetFromGround: 290 }, pot: { x: 920, offsetFromGround: 150 }, cuttingBoard: { x: 1600, offsetFromGround: 220 } },
-    recipe: {
-      name: "Pastilla au Poulet & Ail",
-      imgUrl: "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=300&q=80",
-      funFact: "La pastilla marie subtilement le salé et le sucré en combinant de la volaille épicée, des amandes et de la cannelle dans une pâte croustillante.",
-      steps: [
-        { id: 'pickup', label: "1. Prendre de l'Ail 🧄", targetItem: '🧄' },
-        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: "3. Prendre l'Ail coupé 🧄" },
-        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
-        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
-      ]
-    }
-  },
-  {
-    id: 4,
-    name: "Monde 5 : Paradis Céleste ✨",
-    bgStyle: { background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 65%, #cbd5e1 100%)' },
-    platforms: PLATFORMS_W5,
-    items: [{ id: 'item_w5_1', x: 980, type: '🍋', state: 'raw' }],
-    stations: { pot: { x: 220, offsetFromGround: 160 }, counter: { x: 1380, offsetFromGround: 270 }, cuttingBoard: { x: 600, offsetFromGround: 300 } },
-    recipe: {
-      name: "Poulet Citron Confit",
-      imgUrl: "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=300&q=80",
-      funFact: "Les citrons confits au sel sont un ingrédient signature de la gastronomie marocaine, apportant une acidité unique et parfumée.",
-      steps: [
-        { id: 'pickup', label: '1. Prendre un Citron 🍋', targetItem: '🍋' },
-        { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: '3. Prendre le Citron coupé 🍋' },
-        { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
-        { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
-      ]
-    }
   }
 ];
 
@@ -223,19 +165,19 @@ export default function App() {
     servedDishes: 0
   });
 
-  const [gameState, setGameState] = useState('waiting');
+  const [gameState, setGameState] = useState('waiting'); // 'waiting', 'cinematic', 'playing'
+  const [cinematicPhase, setCinematicPhase] = useState('p1'); // 'p1', 'vs', 'p2', 'done'
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.14 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.16 Ready (1v1 Duels)']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
   const [totalElapsedTime, setTotalElapsedTime] = useState(0);
   const [isGameFinished, setIsGameFinished] = useState(false);
   const [leaderboard, setLeaderboard] = useState([
-    { name: 'Chef Saffron', time: '1m 12s', score: 1500 },
-    { name: 'ZelligeMaster', time: '1m 45s', score: 1500 },
-    { name: 'BaguetteBoss', time: '2m 10s', score: 1500 }
+    { name: 'Chef Saffron', time: '0m 52s', score: 900 },
+    { name: 'ZelligeMaster', time: '1m 15s', score: 900 }
   ]);
 
   const [showPortal, setShowPortal] = useState(false);
@@ -330,22 +272,38 @@ export default function App() {
     return () => clearInterval(animTimer);
   }, []);
 
+  // Cinematic Intro Sequence when gameState becomes 'cinematic'
   useEffect(() => {
-    if (gameState === 'playing' && !isHost) {
-      setGameStartTime(Date.now());
-      setCountdown(3);
-      const t1 = setTimeout(() => setCountdown(2), 1000);
-      const t2 = setTimeout(() => setCountdown(1), 2000);
-      const t3 = setTimeout(() => setCountdown('GO!'), 3000);
-      const t4 = setTimeout(() => {
-        setCountdown(null);
-        triggerAchievement(`Objectif : ${recipeRef.current.steps[0].label}`, 'info', 4000);
-      }, 3700);
+    if (gameState === 'cinematic') {
+      setCinematicPhase('p1');
+      const t1 = setTimeout(() => setCinematicPhase('vs'), 1100);
+      const t2 = setTimeout(() => setCinematicPhase('p2'), 2200);
+      const t3 = setTimeout(() => {
+        setCinematicPhase('done');
+        setGameState('playing');
+        if (!isHost) {
+          setGameStartTime(Date.now());
+          setCountdown(3);
+          const c1 = setTimeout(() => setCountdown(2), 1000);
+          const c2 = setTimeout(() => setCountdown(1), 2000);
+          const c3 = setTimeout(() => setCountdown('GO!'), 3000);
+          const c4 = setTimeout(() => {
+            setCountdown(null);
+            triggerAchievement(`Objectif 1v1 : ${recipeRef.current.steps[0].label}`, 'info', 4000);
+          }, 3700);
+          return () => {
+            clearTimeout(c1);
+            clearTimeout(c2);
+            clearTimeout(c3);
+            clearTimeout(c4);
+          };
+        }
+      }, 3400);
+
       return () => {
         clearTimeout(t1);
         clearTimeout(t2);
         clearTimeout(t3);
-        clearTimeout(t4);
       };
     }
   }, [gameState, isHost]);
@@ -418,7 +376,7 @@ export default function App() {
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
-          updateActiveStep(2); // Step 2: pickup_chopped
+          updateActiveStep(2);
           triggerAchievement("🌟 Ingrédient coupé prêt ! Appuyez sur ESPACE pour le prendre !", 'info', 3000);
         }, 1500);
 
@@ -466,7 +424,7 @@ export default function App() {
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
-          updateActiveStep(4); // Step 4: pickup_cooked
+          updateActiveStep(4);
           triggerAchievement("🌟 Plat cuit prêt ! Appuyez sur ESPACE pour le prendre !", 'info', 3000);
         }, 1500);
 
@@ -507,7 +465,7 @@ export default function App() {
   };
 
   const handleSpaceAction = () => {
-    if (isHost || countdown !== null || isGameFinished) return;
+    if (isHost || countdown !== null || isGameFinished || gameState === 'cinematic') return;
 
     if (activeMinigame) {
       resolveMinigame();
@@ -551,12 +509,12 @@ export default function App() {
           setTotalElapsedTime(timeStr);
           setIsGameFinished(true);
 
-          setLeaderboard(prev => [...prev, { name: playerName || 'Chef Anonyme', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
-          triggerAchievement("🏆 FÉLICITATIONS ! Vous avez terminé le jeu !", 'success', 6000);
+          setLeaderboard(prev => [...prev, { name: playerName || 'Chef 1v1', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
+          triggerAchievement("🏆 VICTOIRE DU DUEL 1v1 ! Vous avez écrasé votre rival !", 'success', 6000);
           return;
         }
 
-        triggerAchievement("🎉 Plat servi avec succès ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
+        triggerAchievement("🎉 Plat servi ! Portail dimensionnel 1v1 ouvert ! 🌀", 'success', 4000);
 
         setPortalActive(true);
         setTimeout(() => { setShowPortal(true); }, 800);
@@ -583,7 +541,7 @@ export default function App() {
 
           setShowPortal(false);
           setPortalActive(false);
-          triggerAchievement(`Bienvenue dans le ${nextCfg.name} ! Position de départ réinitialisée.`, 'info', 4000);
+          triggerAchievement(`Bienvenue dans le ${nextCfg.name} ! Duel round suivant.`, 'info', 4000);
         }, 2400);
 
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
@@ -631,7 +589,7 @@ export default function App() {
       }
     }
 
-    // 4. Picking up items from the world (Raw, Chopped, or Cooked)
+    // 4. Picking up items from the world
     if (!curHolding) {
       let pickedItemIndex = -1;
       let pickedItem = null;
@@ -662,9 +620,9 @@ export default function App() {
           updateHolding(pickedItem.type, itemStateVal);
           triggerAchievement(`✅ Pris avec succès ! Prochaine étape active.`, 'success', 3500);
 
-          if (isRawPickup) updateActiveStep(1); // Next: cut
-          else if (isChoppedPickup) updateActiveStep(3); // Next: cook
-          else if (isCookedPickup) updateActiveStep(5); // Next: serve
+          if (isRawPickup) updateActiveStep(1);
+          else if (isChoppedPickup) updateActiveStep(3);
+          else if (isCookedPickup) updateActiveStep(5);
         } else {
           setScore(prev => Math.max(0, prev - 20));
           triggerAchievement(`❌ Ce n'est pas le bon ingrédient ou la bonne étape ! -20 pts`, 'error', 3500);
@@ -820,7 +778,25 @@ export default function App() {
 
   const startShift = () => {
     if (db && roomCode) {
-      update(ref(db, `rooms/${roomCode}`), { status: 'playing' });
+      // If only 1 player joined, automatically add an AI Bot Rival into slot 2 for the 1v1!
+      const currentPlayers = Object.keys(players);
+      let updatedPlayers = { ...players };
+      if (currentPlayers.length <= 1) {
+        const botId = 'player_bot_rival';
+        updatedPlayers[botId] = {
+          name: 'Chef Rival 🤖',
+          x: 300,
+          heightAboveGround: 0,
+          anim: 'idle',
+          facingRight: true,
+          holding: null
+        };
+      }
+
+      update(ref(db, `rooms/${roomCode}`), {
+        status: 'cinematic',
+        players: updatedPlayers
+      });
     }
   };
 
@@ -835,7 +811,7 @@ export default function App() {
       set(ref(db, `rooms/${code}`), {
         status: 'waiting',
         stations: { cuttingBoardItem: null, cuttingBoardActive: false, potItem: null, potCooking: false, servedDishes: 0 },
-        logs: [`👑 Salon ${code} ouvert`]
+        logs: [`👑 Salon 1v1 ${code} ouvert`]
       });
     }
   };
@@ -843,6 +819,20 @@ export default function App() {
   const joinRoom = (e) => {
     e.preventDefault();
     if (!roomCode) return;
+    
+    // Check player count restriction (max 2 players in 1v1)
+    if (db) {
+      const roomRef = ref(db, `rooms/${roomCode}/players`);
+      onValue(roomRef, (snapshot) => {
+        const pData = snapshot.val() || {};
+        const count = Object.keys(pData).length;
+        if (count >= 2 && !pData[myId]) {
+          alert("Désolé, ce salon 1v1 est déjà complet (2 joueurs maximum) !");
+          return;
+        }
+      }, { onlyOnce: true });
+    }
+
     setIsHost(false);
     const uniqueName = getRandomName();
     setPlayerName(uniqueName);
@@ -901,6 +891,13 @@ export default function App() {
   const isTargetVisible = targetWorldX >= cameraX && targetWorldX <= cameraX + viewWidthWorld;
   const isTargetToLeft = !isTargetVisible && targetWorldX < cameraX;
   const isTargetToRight = !isTargetVisible && targetWorldX > cameraX + viewWidthWorld;
+
+  // Identify Player 1 and Player 2 for Cinematic
+  const playerIds = Object.keys(players);
+  const p1Id = playerIds[0] || myId;
+  const p2Id = playerIds[1] || 'player_bot_rival';
+  const p1Name = (p1Id === myId ? playerName : players[p1Id]?.name) || playerName || 'Chef 1';
+  const p2Name = (p2Id === myId ? playerName : players[p2Id]?.name) || 'Chef Rival 🤖';
 
   return (
     <div style={{ ...styles.appContainer, ...worldConfig.bgStyle }}>
@@ -986,6 +983,28 @@ export default function App() {
         .animated-portal {
           animation: portalSwirl 1.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
+        @keyframes slideInLeft {
+          0% { transform: translateX(-150vw); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        .cinematic-slide-left {
+          animation: slideInLeft 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes slideInRight {
+          0% { transform: translateX(150vw); opacity: 0; }
+          100% { transform: translateX(0); opacity: 1; }
+        }
+        .cinematic-slide-right {
+          animation: slideInRight 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes vsPulse {
+          0% { transform: scale(0.2); opacity: 0; }
+          60% { transform: scale(1.3); opacity: 1; }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        .cinematic-vs {
+          animation: vsPulse 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
       `}</style>
 
       {(screen === 'home' || screen === 'mode_select') && (
@@ -1003,7 +1022,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.14)</p>
+            <p style={styles.subTitle}>Duels 1v1 (3 Mondes)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1013,12 +1032,12 @@ export default function App() {
         <div style={styles.centeredWrapper}>
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
-            <h1 style={styles.mainTitle}>🍳 Mode de Jeu</h1>
-            <button onClick={createRoom} style={styles.primaryBtn}>👑 Héberger une Partie (Hôte)</button>
+            <h1 style={styles.mainTitle}>🍳 Mode de Duel 1v1</h1>
+            <button onClick={createRoom} style={styles.primaryBtn}>👑 Créer un Salon 1v1 (Hôte)</button>
             <div style={styles.divider}><span>OU</span></div>
             <form onSubmit={joinRoom} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <input type="text" placeholder="CODE DE SALON" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} style={styles.input} required />
-              <button type="submit" style={styles.secondaryBtn}>🎮 Rejoindre</button>
+              <input type="text" placeholder="CODE DE SALON (MAX 2)" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} style={styles.input} required />
+              <button type="submit" style={styles.secondaryBtn}>🎮 Rejoindre (1v1)</button>
             </form>
             <button onClick={() => setScreen('home')} style={styles.backBtn}>⬅️ Retour</button>
           </div>
@@ -1028,17 +1047,20 @@ export default function App() {
       {isHost && (
         <div style={styles.hostFullScreen}>
           <div style={styles.hostHeader}>
-            <div style={styles.codeBadge}>🔑 Salon : <strong>{roomCode}</strong> <button onClick={copyRoomCode} style={styles.copyBtn}>{copied ? '✅' : '📋'}</button></div>
+            <div style={styles.codeBadge}>🔑 Salon 1v1 : <strong>{roomCode}</strong> <button onClick={copyRoomCode} style={styles.copyBtn}>{copied ? '✅' : '📋'}</button></div>
           </div>
           <div style={styles.hostGrid}>
             <div style={styles.panel}>
-              <h3>👥 Chefs Compétiteurs ({Object.keys(players).length})</h3>
-              {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs...</p> : (
-                Object.keys(players).map(id => (
+              <h3>👥 Duelistes En Ligne ({Object.keys(players).length}/2 Max)</h3>
+              {Object.keys(players).length === 0 ? <p style={{ color: '#94a3b8' }}>En attente de joueurs (Solo ou 1v1)...</p> : (
+                Object.keys(players).map((id, idx) => (
                   <div key={id} style={styles.playerItem}>
-                    <span>👨‍🍳 {players[id].name} {players[id].holding ? `(Porte: ${players[id].holding})` : ''}</span>
+                    <span>👨‍🍳 Slot {idx + 1}: {players[id].name}</span>
                   </div>
                 ))
+              )}
+              {Object.keys(players).length <= 1 && (
+                <p style={{ color: '#38bdf8', fontSize: '0.85rem', marginTop: '10px' }}>ℹ️ Si vous lancez seul, un Bot Rival 🤖 sera automatiquement ajouté !</p>
               )}
             </div>
             <div style={styles.panel}>
@@ -1047,7 +1069,7 @@ export default function App() {
             </div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <button onClick={startShift} style={styles.primaryBtn}>🚀 Démarrer la Partie</button>
+            <button onClick={startShift} style={styles.primaryBtn}>🎬 Lancer l'Intro Cinématique 1v1</button>
           </div>
         </div>
       )}
@@ -1055,12 +1077,48 @@ export default function App() {
       {!isHost && gameState === 'waiting' && screen === 'player_lobby' && (
         <div style={styles.centeredWrapper}>
           <div style={styles.menuBox}>
-            <h3>Salon : {roomCode}</h3>
+            <h3>Salon 1v1 : {roomCode}</h3>
             <div style={{ display: 'flex', justifyContent: 'center', margin: '15px 0' }}>
               <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
             </div>
             <p style={{ color: '#38bdf8', fontSize: '1.3rem', margin: '10px 0 20px 0', fontWeight: '800' }}>{playerName}</p>
-            <p style={{ color: '#94a3b8' }}>⏳ En attente du démarrage par l'hôte...</p>
+            <p style={{ color: '#94a3b8' }}>⏳ En attente du lancement par l'hôte (1v1)...</p>
+          </div>
+        </div>
+      )}
+
+      {/* Cinematic Intro Overlay */}
+      {gameState === 'cinematic' && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.95)', zIndex: 250, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '40px', width: '100%', maxWidth: '900px', padding: '0 20px' }}>
+            
+            {/* Player 1 Entry */}
+            {(cinematicPhase === 'p1' || cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
+              <div className="cinematic-slide-left" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(30, 27, 75, 0.85)', border: '3px solid #38bdf8', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(56, 189, 248, 0.4)' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#38bdf8', marginBottom: '15px' }}>{p1Name}</div>
+                <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
+                  <ChefSprite anim="idle" facingRight={true} frameTick={frameTick} />
+                </div>
+              </div>
+            )}
+
+            {/* VS Stamp */}
+            {(cinematicPhase === 'vs' || cinematicPhase === 'p2' || cinematicPhase === 'done') && (
+              <div className="cinematic-vs" style={{ fontSize: '4.5rem', fontWeight: '900', color: '#fbbf24', textShadow: '0 0 30px #f59e0b, 0 0 60px #ef4444' }}>
+                VS
+              </div>
+            )}
+
+            {/* Player 2 / Bot Rival Entry */}
+            {(cinematicPhase === 'p2' || cinematicPhase === 'done') && (
+              <div className="cinematic-slide-right" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'rgba(75, 27, 27, 0.85)', border: '3px solid #ef4444', padding: '30px 40px', borderRadius: '24px', boxShadow: '0 0 30px rgba(239, 68, 68, 0.4)' }}>
+                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#ef4444', marginBottom: '15px' }}>{p2Name}</div>
+                <div style={{ transform: 'scale(2.5)', margin: '20px 0' }}>
+                  <ChefSprite anim="idle" facingRight={false} frameTick={frameTick} />
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       )}
@@ -1073,22 +1131,22 @@ export default function App() {
             <span>🌍 {worldConfig.name}</span>
             <span>🦘 Sauts: {jumpsLeft}/2</span>
             <span>🎒 En main: {holdingItem ? `${holdingItem} (${holdingState})` : 'Aucun'}</span>
-            <span>🍲 Plats: {stationState.servedDishes}</span>
+            <span>🍲 Plats: {stationState.servedDishes}/3</span>
           </div>
 
           {/* Game Finished Victory Screen Modal & Leaderboard */}
           {isGameFinished && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.92)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <div style={{ background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '28px', padding: '40px', width: '100%', maxWidth: '600px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
-                <h1 style={{ color: '#fbbf24', fontSize: '2.5rem', fontWeight: '900', margin: '0 0 10px 0' }}>🏆 VICTOIRE TOTALE ! 🏆</h1>
-                <p style={{ color: '#cbd5e1', fontSize: '1.2rem', marginBottom: '20px' }}>Vous avez terminé tous les 5 mondes avec succès !</p>
+                <h1 style={{ color: '#fbbf24', fontSize: '2.5rem', fontWeight: '900', margin: '0 0 10px 0' }}>🏆 VICTOIRE DU DUEL 1v1 ! 🏆</h1>
+                <p style={{ color: '#cbd5e1', fontSize: '1.2rem', marginBottom: '20px' }}>Vous avez vaincu votre rival sur tous les 3 mondes !</p>
                 
                 <div style={{ background: 'rgba(15, 23, 42, 0.7)', borderRadius: '16px', padding: '16px', marginBottom: '24px', border: '1px solid rgba(255,255,255,0.1)' }}>
-                  <p style={{ fontSize: '1.1rem', color: '#38bdf8', fontWeight: '800', margin: '5px 0' }}>⏱️ Temps total : {totalElapsedTime}</p>
+                  <p style={{ fontSize: '1.1rem', color: '#38bdf8', fontWeight: '800', margin: '5px 0' }}>⏱️ Temps total du duel : {totalElapsedTime}</p>
                   <p style={{ fontSize: '1.1rem', color: '#34d399', fontWeight: '800', margin: '5px 0' }}>⭐ Score Final : {score} pts</p>
                 </div>
 
-                <h3 style={{ color: '#fbbf24', marginBottom: '12px' }}>📊 Classement des Chefs (Leaderboard)</h3>
+                <h3 style={{ color: '#fbbf24', marginBottom: '12px' }}>📊 Classement 1v1 (Leaderboard)</h3>
                 <div style={{ maxHeight: '180px', overflowY: 'auto', background: '#0f172a', borderRadius: '12px', padding: '12px', marginBottom: '24px' }}>
                   {leaderboard.map((entry, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid rgba(255,255,255,0.08)', fontWeight: '700', fontSize: '0.95rem' }}>
@@ -1098,7 +1156,7 @@ export default function App() {
                   ))}
                 </div>
 
-                <button onClick={() => window.location.reload()} style={styles.primaryBtn}>🔄 Rejouer une Partie</button>
+                <button onClick={() => window.location.reload()} style={styles.primaryBtn}>🔄 Nouveau Duel 1v1</button>
               </div>
             </div>
           )}
@@ -1146,7 +1204,7 @@ export default function App() {
                 🌀
               </div>
               <h2 style={{ color: '#fbbf24', marginTop: '30px', fontSize: '2rem', fontWeight: '900', textShadow: '0 4px 15px rgba(0,0,0,0.8)' }}>
-                ✨ Téléportation & Retour au Départ... ✨
+                ✨ Téléportation 1v1 & Monde Suivant... ✨
               </h2>
             </div>
           )}
@@ -1175,7 +1233,7 @@ export default function App() {
             <div style={styles.minigameOverlay}>
               <div style={styles.minigameBox}>
                 <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
-                  {activeMinigame.type === 'cut' ? '🔪 COUPE !' : '🔥 CUISSON !'}
+                  {activeMinigame.type === 'cut' ? '🔪 COUPE DUEL !' : '🔥 CUISSON DUEL !'}
                 </div>
                 <p style={{ color: '#cbd5e1', fontSize: '0.95rem', marginBottom: '18px' }}>Appuie sur <strong>ESPACE</strong> dans la zone verte !</p>
                 <div style={styles.sliderTrack}>
@@ -1305,7 +1363,7 @@ export default function App() {
               <ChefSprite anim={animState} facingRight={facingRight} frameTick={frameTick} isGhost={false} />
             </div>
 
-            {/* Remote Competitor Ghost Render */}
+            {/* Remote Competitor Ghost Render (Rival) */}
             {Object.keys(players).filter(pid => pid !== myId).map(pid => {
               const p = players[pid];
               const px = p.x || 140;
@@ -1318,7 +1376,7 @@ export default function App() {
                   {p.holding && (
                     <div className="holding-arrow" style={{ ...styles.holdingIndicator, opacity: 0.5 }}>▼ {p.holding}</div>
                   )}
-                  <div style={{ ...styles.tag, opacity: 0.6 }}>👻 {p.name}</div>
+                  <div style={{ ...styles.tag, opacity: 0.7, borderColor: '#ef4444' }}>⚔️ {p.name}</div>
                   <ChefSprite anim={pAnim} facingRight={pFacing} frameTick={frameTick} isGhost={true} />
                 </div>
               );
