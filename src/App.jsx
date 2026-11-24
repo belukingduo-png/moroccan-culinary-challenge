@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.12-zellige";
+const APP_VERSION = "v12.13-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -226,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.12 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.13 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -373,6 +373,12 @@ export default function App() {
     return () => clearInterval(interval);
   }, [activeMinigame]);
 
+  const respawnWorldItems = (activeWorldCfg) => {
+    const freshItems = activeWorldCfg.items.map(item => ({ ...item, id: `${item.id}_${Date.now()}` }));
+    setWorldItems(freshItems);
+    itemsRef.current = freshItems;
+  };
+
   const resolveMinigame = () => {
     if (!activeMinigame) return;
     const posVal = sliderPosRef.current;
@@ -420,11 +426,12 @@ export default function App() {
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Coupe ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
+        triggerAchievement("❌ Coupe ratée ! -20 pts. L'ingrédient a réapparu à sa place !", 'error', 4000);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
         updateHolding(null, 'raw');
+        respawnWorldItems(activeWorldCfg);
         updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
       }
@@ -467,11 +474,12 @@ export default function App() {
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Cuisson ratée ! -20 pts. Recommencez depuis le début", 'error', 4000);
+        triggerAchievement("❌ Cuisson ratée ! -20 pts. L'ingrédient a réapparu à sa place !", 'error', 4000);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
         updateHolding(null, 'raw');
+        respawnWorldItems(activeWorldCfg);
         updateActiveStep(0);
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
       }
@@ -875,7 +883,7 @@ export default function App() {
   let targetWorldX = 220;
   if (currentStepObj.id === 'pickup') {
     const foundItem = worldItems.find(i => i.state === 'raw');
-    targetWorldX = foundItem ? foundItem.x : 220;
+    targetWorldX = foundItem ? foundItem.x : (worldConfig.items[0]?.x || 220);
   } else if (currentStepObj.id === 'cut') {
     targetWorldX = stations.cuttingBoard.x;
   } else if (currentStepObj.id === 'pickup_chopped') {
@@ -996,7 +1004,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.12)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.13)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
