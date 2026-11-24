@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.13-zellige";
+const APP_VERSION = "v12.14-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -226,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.13 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.14 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -399,7 +399,6 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          // Safe placement on platform matching station X
           const cbPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
           let safeX = stations.cuttingBoard.x + 50;
           if (cbPlatform) {
@@ -426,7 +425,8 @@ export default function App() {
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Coupe ratée ! -20 pts. L'ingrédient a réapparu à sa place !", 'error', 4000);
+        const itemName = activeMinigame.itemType;
+        triggerAchievement(`❌ Coupe ratée ! -20 pts. ${itemName} a réapparu à sa position d'origine !`, 'error', 4500);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -447,7 +447,6 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          // Safe placement on platform matching station X
           const potPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
           let safeX = stations.pot.x + 50;
           if (potPlatform) {
@@ -474,7 +473,7 @@ export default function App() {
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Cuisson ratée ! -20 pts. L'ingrédient a réapparu à sa place !", 'error', 4000);
+        triggerAchievement("❌ Cuisson ratée ! -20 pts. L'ingrédient a réapparu à sa position d'origine !", 'error', 4500);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -1004,7 +1003,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.13)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.14)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
