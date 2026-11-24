@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update } from 'firebase/database';
 
-const APP_VERSION = "v12.10-zellige";
+const APP_VERSION = "v12.11-zellige";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -85,9 +85,9 @@ const WORLDS_CONFIG = [
       steps: [
         { id: 'pickup', label: '1. Prendre une Tomate 🍅', targetItem: '🍅' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: '3. Attraper la Tomate coupée 🍅' },
+        { id: 'pickup_chopped', label: '3. Prendre la Tomate coupée 🍅' },
         { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
@@ -106,9 +106,9 @@ const WORLDS_CONFIG = [
       steps: [
         { id: 'pickup', label: '1. Prendre un Champignon 🍄', targetItem: '🍄' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: '3. Attraper le Champignon coupé 🍄' },
+        { id: 'pickup_chopped', label: '3. Prendre le Champignon coupé 🍄' },
         { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
@@ -127,9 +127,9 @@ const WORLDS_CONFIG = [
       steps: [
         { id: 'pickup', label: '1. Prendre un Piment 🌶️', targetItem: '🌶️' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: '3. Attraper le Piment coupé 🌶️' },
+        { id: 'pickup_chopped', label: '3. Prendre le Piment coupé 🌶️' },
         { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
@@ -148,9 +148,9 @@ const WORLDS_CONFIG = [
       steps: [
         { id: 'pickup', label: "1. Prendre de l'Ail 🧄", targetItem: '🧄' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: "3. Attraper l'Ail coupé 🧄" },
+        { id: 'pickup_chopped', label: "3. Prendre l'Ail coupé 🧄" },
         { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
@@ -169,9 +169,9 @@ const WORLDS_CONFIG = [
       steps: [
         { id: 'pickup', label: '1. Prendre un Citron 🍋', targetItem: '🍋' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
-        { id: 'pickup_chopped', label: '3. Attraper le Citron coupé 🍋' },
+        { id: 'pickup_chopped', label: '3. Prendre le Citron coupé 🍋' },
         { id: 'cook', label: '4. Cuire dans le Pot 🍲' },
-        { id: 'pickup_cooked', label: '5. Attraper le Plat cuit 🍲' },
+        { id: 'pickup_cooked', label: '5. Prendre le Plat cuit 🍲' },
         { id: 'serve', label: '6. Servir au Comptoir 🛎️' }
       ]
     }
@@ -226,7 +226,7 @@ export default function App() {
   const [gameState, setGameState] = useState('waiting');
   const [countdown, setCountdown] = useState(null);
   const [score, setScore] = useState(0);
-  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.10 Ready']);
+  const [logs, setLogs] = useState(['🔥 Zellige & Saffron v12.11 Ready']);
   const [myId] = useState(() => 'player_' + Math.random().toString(36).substring(2, 7));
 
   const [gameStartTime, setGameStartTime] = useState(null);
@@ -380,37 +380,33 @@ export default function App() {
     const step = recipeRef.current.steps[activeStepIndexRef.current];
     const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
     const stations = activeWorldCfg.stations;
-    const floorY = viewportRef.current.h - GROUND_HEIGHT;
 
     if (activeMinigame.type === 'cut') {
       if (isGood && step && step.id === 'cut') {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Super coupe ! Regardez l'ingrédient s'envoler !", 'success', 2500);
+        triggerAchievement("✅ Super coupe ! Découpe en cours (1.5s)...", 'success', 2000);
 
+        // Continue cutting animation for 1.5s, then place chopped item cleanly beside cutting board on the platform
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          const cbPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.cuttingBoard.offsetFromGround);
-          const cbPlatformTop = cbPlatform ? floorY - cbPlatform.offsetFromGround : floorY;
-
-          const thrownItem = {
-            id: 'thrown_' + Date.now(),
-            x: stations.cuttingBoard.x,
-            landingY: cbPlatformTop, // lands right on platform level for easy catch
+          const readyItem = {
+            id: 'chopped_' + Date.now(),
+            x: stations.cuttingBoard.x - 52, // sits right next to the board on the same platform
             type: activeMinigame.itemType,
             state: 'chopped'
           };
-          const nextItems = [...itemsRef.current, thrownItem];
+          const nextItems = [...itemsRef.current, readyItem];
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
           updateActiveStep(2); // Step 2: pickup_chopped
-          triggerAchievement("🌟 Ingrédient coupé lancé ! Attrapez-le !", 'info', 3000);
-        }, 1000);
+          triggerAchievement("🌟 Ingrédient coupé prêt ! Appuyez sur ESPACE pour le prendre !", 'info', 3000);
+        }, 1500);
 
       } else {
         setActiveMinigame(null);
@@ -427,31 +423,28 @@ export default function App() {
       if (isGood && step && step.id === 'cook') {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Cuisson parfaite ! Regardez le plat s'envoler !", 'success', 2500);
+        triggerAchievement("✅ Cuisson parfaite ! Mijotage en cours (1.5s)...", 'success', 2000);
 
+        // Continue boiling animation for 1.5s, then place cooked dish cleanly beside pot on the platform
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
           stationRef.current = updatedStations;
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          const potPlatform = activeWorldCfg.platforms.find(p => p.offsetFromGround === stations.pot.offsetFromGround);
-          const potPlatformTop = potPlatform ? floorY - potPlatform.offsetFromGround : floorY;
-
-          const thrownDish = {
-            id: 'thrown_' + Date.now(),
-            x: stations.pot.x,
-            landingY: potPlatformTop, // lands right on platform level for easy catch
+          const readyDish = {
+            id: 'cooked_' + Date.now(),
+            x: stations.pot.x - 52, // sits right next to the pot on the same platform
             type: '🍲',
             state: 'cooked'
           };
-          const nextItems = [...itemsRef.current, thrownDish];
+          const nextItems = [...itemsRef.current, readyDish];
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
           updateActiveStep(4); // Step 4: pickup_cooked
-          triggerAchievement("🌟 Plat cuit lancé ! Attrapez-le pour le servir !", 'info', 3000);
-        }, 1000);
+          triggerAchievement("🌟 Plat cuit prêt ! Appuyez sur ESPACE pour le prendre !", 'info', 3000);
+        }, 1500);
 
       } else {
         setActiveMinigame(null);
@@ -590,8 +583,8 @@ export default function App() {
           setScore(prev => Math.max(0, prev - 15));
           triggerAchievement("❌ Ce n'est pas la bonne étape pour couper ! -15 pts", 'error', 3000);
         }
+        return;
       }
-      return;
     }
 
     // 3. Cooking in Pot
@@ -609,8 +602,8 @@ export default function App() {
           setScore(prev => Math.max(0, prev - 15));
           triggerAchievement("❌ Ce n'est pas la bonne étape pour cuisiner ! -15 pts", 'error', 3000);
         }
+        return;
       }
-      return;
     }
 
     // 4. Picking up items from the world (Raw, Chopped, or Cooked)
@@ -620,11 +613,11 @@ export default function App() {
 
       itemsRef.current.forEach((item, idx) => {
         const xDist = Math.abs(px - item.x);
-        const itemPlatform = activeWorldCfg.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
-        const itemWorldY = item.landingY !== undefined ? item.landingY : (itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY);
+        const itemPlatform = activeWorldCfg.platforms.find(p => item.x >= p.x - 10 && item.x <= p.x + p.w + 10);
+        const itemWorldY = itemPlatform ? floorY - itemPlatform.offsetFromGround : floorY;
         const yDist = Math.abs(py - itemWorldY);
 
-        if (xDist < 70 && yDist < 70 && !pickedItem) {
+        if (xDist < 75 && yDist < 75 && !pickedItem) {
           pickedItem = item;
           pickedItemIndex = idx;
         }
@@ -642,7 +635,7 @@ export default function App() {
 
           const itemStateVal = pickedItem.state || 'raw';
           updateHolding(pickedItem.type, itemStateVal);
-          triggerAchievement(`✅ Attrapé avec succès ! Prochaine étape.`, 'success', 3500);
+          triggerAchievement(`✅ Pris avec succès ! Prochaine étape active.`, 'success', 3500);
 
           if (isRawPickup) updateActiveStep(1); // Next: cut
           else if (isChoppedPickup) updateActiveStep(3); // Next: cook
@@ -865,10 +858,16 @@ export default function App() {
   if (currentStepObj.id === 'pickup') {
     const foundItem = worldItems.find(i => i.state === 'raw');
     targetWorldX = foundItem ? foundItem.x : 220;
-  } else if (currentStepObj.id === 'cut' || currentStepObj.id === 'pickup_chopped') {
+  } else if (currentStepObj.id === 'cut') {
     targetWorldX = stations.cuttingBoard.x;
-  } else if (currentStepObj.id === 'cook' || currentStepObj.id === 'pickup_cooked') {
+  } else if (currentStepObj.id === 'pickup_chopped') {
+    const foundChopped = worldItems.find(i => i.state === 'chopped');
+    targetWorldX = foundChopped ? foundChopped.x : stations.cuttingBoard.x - 52;
+  } else if (currentStepObj.id === 'cook') {
     targetWorldX = stations.pot.x;
+  } else if (currentStepObj.id === 'pickup_cooked') {
+    const foundCooked = worldItems.find(i => i.state === 'cooked');
+    targetWorldX = foundCooked ? foundCooked.x : stations.pot.x - 52;
   } else if (currentStepObj.id === 'serve') {
     targetWorldX = stations.counter.x;
   }
@@ -936,9 +935,9 @@ export default function App() {
           animation: popCountdown 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
         @keyframes goldenPulse {
-          0% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
-          50% { transform: scale(1.25) translateX(-40%); filter: drop-shadow(0 0 20px #fbbf24) drop-shadow(0 0 40px #f59e0b); }
-          100% { transform: scale(1) translateX(-50%); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
+          0% { transform: scale(1); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
+          50% { transform: scale(1.22); filter: drop-shadow(0 0 20px #fbbf24) drop-shadow(0 0 40px #f59e0b); }
+          100% { transform: scale(1); filter: drop-shadow(0 0 10px #fbbf24) drop-shadow(0 0 25px #f59e0b); }
         }
         .golden-glow-item {
           animation: goldenPulse 0.9s ease-in-out infinite;
@@ -979,7 +978,7 @@ export default function App() {
           <div style={styles.versionBadge}>{APP_VERSION}</div>
           <div style={styles.menuBox}>
             <h1 style={styles.mainTitle}>🍳 Zellige & Saffron</h1>
-            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.10)</p>
+            <p style={styles.subTitle}>Platformer Co-op 2.5D (v12.11)</p>
             <button onClick={() => setScreen('mode_select')} style={styles.primaryBtn}>▶️ JOUER</button>
           </div>
         </div>
@@ -1247,11 +1246,10 @@ export default function App() {
               <div style={{ fontSize: '3.2rem', filter: 'drop-shadow(0 4px 6px rgba(0,0,0,0.3))' }}>🛎️</div>
             </div>
 
-            {/* Persistent World Ingredients & Thrown Items */}
+            {/* Persistent World Ingredients & Output Items */}
             {worldItems.map((item, idx) => {
-              const itemPlatform = worldConfig.platforms.find(p => Math.abs(p.x + p.w/2 - item.x) < p.w/2);
-              const defaultPlatformTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
-              const itemTop = item.landingY !== undefined ? item.landingY - 34 : defaultPlatformTop;
+              const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 10 && item.x <= p.x + p.w + 10);
+              const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
 
               const isRawTarget = currentStepObj.id === 'pickup' && item.state === 'raw';
               const isChoppedTarget = currentStepObj.id === 'pickup_chopped' && item.state === 'chopped';
@@ -1260,11 +1258,11 @@ export default function App() {
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
-                <div key={item.id || idx} style={{ position: 'absolute', left: `${item.x}px`, top: `${itemTop}px`, transform: 'translateX(-50%)' }}>
+                <div key={item.id || idx} style={{ position: 'absolute', left: `${item.x}px`, top: `${itemTop}px`, width: '36px', marginLeft: '-18px', display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 15 }}>
                   {isItemVisibleOnScreen && (
-                    <div className="holding-arrow" style={{ position: 'absolute', top: '-46px', left: '50%', transform: 'translateX(-50%)', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 12px #f59e0b' }}>▼</div>
+                    <div className="holding-arrow" style={{ position: 'absolute', top: '-44px', fontSize: '2.4rem', color: '#fbbf24', fontWeight: '900', zIndex: 16, textShadow: '0 0 12px #f59e0b', pointerEvents: 'none' }}>▼</div>
                   )}
-                  <div className={isTargetItem ? "golden-glow-item" : ""} style={{ fontSize: '1.8rem', filter: isTargetItem ? 'drop-shadow(0 0 16px #fbbf24) drop-shadow(0 0 30px #f59e0b)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))' }}>
+                  <div className={isTargetItem ? "golden-glow-item" : ""} style={{ fontSize: '1.8rem', lineHeight: 1, filter: isTargetItem ? 'drop-shadow(0 0 16px #fbbf24) drop-shadow(0 0 30px #f59e0b)' : 'drop-shadow(0 3px 5px rgba(0,0,0,0.3))' }}>
                     {item.type}
                   </div>
                 </div>
