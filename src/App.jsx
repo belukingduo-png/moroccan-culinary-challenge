@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, onValue, update, remove } from 'firebase/database';
 
-const APP_VERSION = "v13.03-world1-3x3-spice-grid";
+const APP_VERSION = "v13.04-persistent-instructions-fix";
 
 const firebaseConfig = {
   databaseURL: "https://zelligekitchen-default-rtdb.europe-west1.firebasedatabase.app"
@@ -62,29 +62,25 @@ const WORLDS_CONFIG = [
     platforms: PLATFORMS_W1,
     items: [
       { id: 'item_tomat', x: 220, type: '🍅', state: 'raw' },
-      { id: 'item_onion', x: 500, type: '🧅', state: 'raw' },
-      { id: 'item_spice1', x: 1100, type: '🌶️', state: 'raw' },
-      { id: 'item_spice2', x: 1160, type: '🧄', state: 'raw' },
-      { id: 'item_spice3', x: 1220, type: '🍋', state: 'raw' }
+      { id: 'item_onion', x: 500, type: '🧅', state: 'raw' }
     ],
     floatingChicken: { x: 750, yBase: 220, radiusX: 90, radiusY: 50, speed: 0.04 },
     stations: { cuttingBoard: { x: 920, offsetFromGround: 140 }, pot: { x: 1400, offsetFromGround: 260 }, counter: { x: 1880, offsetFromGround: 180 } },
     recipe: {
-      name: "Tajine de Poulet aux 3 Épices",
+      name: "Tajine de Poulet Complet",
       imgUrl: "/tajine-de-poulet-aux-tomates-scaled.jpg",
-      funFact: "Le tajine authentique requiert une matrice 3x3 parfaite de 3 épices (Piment 🌶️, Ail 🧄, Citron 🍋) pour un équilibre parfait.",
+      funFact: "Le tajine traditionnel combine viandes et légumes mijotés lentement.",
       steps: [
         { id: 'pickup_tomato', label: '1. Prendre la Tomate 🍅', targetItem: '🍅' },
-        { id: 'cut_tomato', label: '2. Couper la Tomate 🔪' },
-        { id: 'place_tomato_pot', label: '3. Tomate dans le Pot 🍲' },
-        { id: 'catch_chicken', label: '4. Attraper le Poulet 🍗' },
-        { id: 'place_chicken_pot', label: '5. Poulet dans le Pot 🍲' },
+        { id: 'cut_tomato', label: '2. Couper la Tomate sur la Planche 🔪' },
+        { id: 'place_tomato_pot', label: '3. Mettre la Tomate coupée dans le Pot 🍲' },
+        { id: 'catch_chicken', label: '4. Attraper le Poulet flottant 🍗' },
+        { id: 'place_chicken_pot', label: '5. Mettre le Poulet dans le Pot 🍲' },
         { id: 'pickup_onion', label: '6. Prendre l\'Oignon 🧅', targetItem: '🧅' },
-        { id: 'cut_onion', label: '7. Couper l\'Oignon 🔪' },
-        { id: 'place_onion_pot', label: '8. Oignon dans le Pot 🍲' },
-        { id: 'spice_matrix', label: '9. Placer les 3 Épices dans la Grille 3x3 🌶️🧄🍋' },
-        { id: 'cook_pot', label: '10. Cuisson Finale au Pot 🔥' },
-        { id: 'serve', label: '11. Servir le Tajine au Comptoir 🛎️' }
+        { id: 'cut_onion', label: '7. Couper l\'Oignon sur la Planche 🔪' },
+        { id: 'place_onion_pot', label: '8. Mettre l\'Oignon dans le Pot 🍲' },
+        { id: 'cook_pot', label: '9. Cuire le Tajine au Pot 🔥' },
+        { id: 'serve', label: '10. Servir le Tajine au Comptoir 🛎️' }
       ]
     }
   },
@@ -98,7 +94,7 @@ const WORLDS_CONFIG = [
     recipe: {
       name: "Couscous aux Champignons",
       imgUrl: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?auto=format&fit=crop&w=300&q=80",
-      funFact: "Le couscous est inscrit au patrimoine immatériel de l'UNESCO.",
+      funFact: "Le couscous symbolise le partage et la convivialité au Maghreb.",
       steps: [
         { id: 'pickup', label: '1. Prendre un Champignon 🍄', targetItem: '🍄' },
         { id: 'cut', label: '2. Couper sur la Planche 🔪' },
@@ -209,12 +205,7 @@ export default function App() {
     setCurrentRecipe(newRecipe);
   };
 
-  const [achievementBanner, setAchievementBanner] = useState({ visible: false, text: '', status: 'info' });
-
-  // 3x3 Spice Grid state for step 9
-  const [showSpiceGrid, setShowSpiceGrid] = useState(false);
-  const [spiceGridCells, setSpiceGridCells] = useState(Array(9).fill(null));
-  const [selectedSpiceType, setSelectedSpiceType] = useState('🌶️');
+  const [persistentMessage, setPersistentMessage] = useState(worldConfig.recipe.steps[0].label);
 
   const [activeMinigame, setActiveMinigame] = useState(null);
   const [sliderPos, setSliderPos] = useState(0);
@@ -256,11 +247,10 @@ export default function App() {
     setHoldingState(state);
   };
 
-  const triggerAchievement = (text, status = 'success', duration = 3500) => {
-    setAchievementBanner({ visible: true, text, status });
-    setTimeout(() => {
-      setAchievementBanner(prev => ({ ...prev, visible: false }));
-    }, duration);
+  const advanceStep = (nextIdx, msg) => {
+    updateActiveStep(nextIdx);
+    const nextMsg = recipeRef.current.steps[nextIdx]?.label || msg;
+    setPersistentMessage(nextMsg);
   };
 
   const backgroundParticles = useMemo(() => {
@@ -314,7 +304,6 @@ export default function App() {
         const c3 = setTimeout(() => setCountdown('GO!'), 3000);
         const c4 = setTimeout(() => {
           setCountdown(null);
-          triggerAchievement(`Objectif 1v1 : ${recipeRef.current.steps[0].label}`, 'info', 4000);
         }, 3700);
         return () => {
           clearTimeout(c1);
@@ -385,12 +374,12 @@ export default function App() {
     const posVal = sliderPosRef.current;
     const isGood = posVal >= 30 && posVal <= 70;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
+    const isWorld1 = currentWorldIndexRef.current === 0;
 
     if (activeMinigame.type === 'cut') {
-      if (isGood && step && step.id.includes('cut')) {
+      if (isGood) {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Super coupe ! Ingrédient prêt !", 'success', 2000);
 
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
@@ -399,15 +388,12 @@ export default function App() {
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
           updateHolding(activeMinigame.itemType, 'chopped');
-          const nextStepIdx = activeStepIndexRef.current + 1;
-          updateActiveStep(nextStepIdx);
-          triggerAchievement("🌟 Prenez l'ingrédient coupé en main !", 'info', 3000);
-        }, 1500);
+          advanceStep(activeStepIndexRef.current + 1);
+        }, 1200);
 
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Coupe ratée ! -20 pts.", 'error', 3500);
         const resetStations = { ...stationRef.current, cuttingBoardItem: null, cuttingBoardActive: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
@@ -415,10 +401,9 @@ export default function App() {
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
       }
     } else if (activeMinigame.type === 'cook') {
-      if (isGood && step && step.id === 'cook_pot') {
+      if (isGood) {
         setScore(prev => prev + 50);
         setActiveMinigame(null);
-        triggerAchievement("✅ Cuisson finale parfaite !", 'success', 2000);
 
         setTimeout(() => {
           const updatedStations = { ...stationRef.current, potItem: null, potCooking: false };
@@ -426,45 +411,25 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
 
-          updateHolding('🍲', 'cooked');
-          const nextStepIdx = activeStepIndexRef.current + 1;
-          updateActiveStep(nextStepIdx);
-          triggerAchievement("🌟 Tajine cuit et prêt à servir au comptoir !", 'info', 3000);
-        }, 1500);
+          if (isWorld1) {
+            updateHolding('🍲', 'cooked');
+            advanceStep(activeStepIndexRef.current + 1);
+          } else {
+            updateHolding('🍲', 'cooked');
+            // For world 2 and 3, after cooking we take the cooked dish and serve it
+            advanceStep(activeStepIndexRef.current + 1);
+          }
+        }, 1200);
 
       } else {
         setActiveMinigame(null);
         setScore(prev => Math.max(0, prev - 20));
-        triggerAchievement("❌ Cuisson ratée ! -20 pts.", 'error', 3500);
         const resetStations = { ...stationRef.current, potItem: null, potCooking: false };
         stationRef.current = resetStations;
         setStationState(resetStations);
         updateHolding(null, 'raw');
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), resetStations);
       }
-    }
-  };
-
-  const handleCellClick = (index) => {
-    const nextCells = [...spiceGridCells];
-    nextCells[index] = selectedSpiceType;
-    setSpiceGridCells(nextCells);
-  };
-
-  const validateSpiceGrid = () => {
-    // Check if 3x3 grid has 3 of each spice (🌶️, 🧄, 🍋)
-    const counts = { '🌶️': 0, '🧄': 0, '🍋': 0 };
-    spiceGridCells.forEach(cell => {
-      if (cell && counts[cell] !== undefined) counts[cell]++;
-    });
-
-    if (counts['🌶️'] === 3 && counts['🧄'] === 3 && counts['🍋'] === 3) {
-      setShowSpiceGrid(false);
-      setScore(prev => prev + 150);
-      triggerAchievement("✅ Grille 3x3 validée parfaitement ! (+150 pts)", 'success', 3000);
-      updateActiveStep(activeStepIndexRef.current + 1);
-    } else {
-      triggerAchievement("❌ Grille incorrecte ! Chaque ligne/slot doit contenir exactement 3 Piments, 3 Ails et 3 Citrons.", 'error', 4500);
     }
   };
 
@@ -516,10 +481,12 @@ export default function App() {
     const curHolding = holdingItemRef.current;
     const curState = holdingStateRef.current;
     const step = recipeRef.current.steps[activeStepIndexRef.current];
+    const isWorld1 = currentWorldIndexRef.current === 0;
 
     // 1. Serving at Counter
     if (Math.abs(px - stations.counter.x) < 80 && Math.abs(py - counterWorldY) < 80) {
-      if (step && step.id === 'serve') {
+      const isServeStep = isWorld1 ? step && step.id === 'serve' : true;
+      if (isServeStep) {
         const updatedStations = { ...stationRef.current, servedDishes: stationRef.current.servedDishes + 1 };
         stationRef.current = updatedStations;
         setStationState(updatedStations);
@@ -539,11 +506,8 @@ export default function App() {
           setTimeout(() => setShowResultsTab(true), 2500);
 
           setLeaderboard(prev => [...prev, { name: playerName || 'Chef 1v1', time: timeStr, score: score + 300 }].sort((a, b) => b.score - a.score));
-          triggerAchievement("🏆 VICTOIRE DU DUEL 1v1 !", 'success', 6000);
           return;
         }
-
-        triggerAchievement("🎉 Plat servi ! Portail dimensionnel ouvert ! 🌀", 'success', 4000);
 
         setPortalActive(true);
         setTimeout(() => { setShowPortal(true); }, 800);
@@ -558,6 +522,7 @@ export default function App() {
           
           updateCurrentRecipe(nextCfg.recipe);
           updateActiveStep(0);
+          setPersistentMessage(nextCfg.recipe.steps[0].label);
 
           const spawnFloor = viewportRef.current.h - GROUND_HEIGHT;
           posRef.current = { x: 140, y: spawnFloor };
@@ -570,12 +535,9 @@ export default function App() {
 
           setShowPortal(false);
           setPortalActive(false);
-          triggerAchievement(`Bienvenue dans le ${nextCfg.name} !`, 'info', 4000);
         }, 2400);
 
         if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-      } else {
-        triggerAchievement("⚠️ La recette n'est pas encore terminée !", 'error', 2500);
       }
       return;
     }
@@ -583,7 +545,8 @@ export default function App() {
     // 2. Cutting at Cutting Board
     if (Math.abs(px - stations.cuttingBoard.x) < 80 && Math.abs(py - cbWorldY) < 80) {
       if (curHolding && curState === 'raw') {
-        if (step && step.id.includes('cut')) {
+        const canCut = isWorld1 ? (step && step.id.includes('cut')) : true;
+        if (canCut) {
           const itemType = curHolding;
           updateHolding(null, 'raw');
           const updatedStations = { ...stationRef.current, cuttingBoardItem: { type: itemType }, cuttingBoardActive: true };
@@ -591,43 +554,50 @@ export default function App() {
           setStationState(updatedStations);
           if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
           setActiveMinigame({ type: 'cut', itemType });
-        } else {
-          triggerAchievement("❌ Ce n'est pas le bon moment pour couper !", 'error', 2500);
         }
         return;
       }
     }
 
-    // 3. Pot or Spice Matrix interaction
+    // 3. Pot Cooking / Placement
     if (Math.abs(px - stations.pot.x) < 80 && Math.abs(py - potWorldY) < 80) {
-      if (step && step.id === 'spice_matrix') {
-        setShowSpiceGrid(true);
-        return;
-      } else if (step && step.id === 'cook_pot') {
-        const updatedStations = { ...stationRef.current, potCooking: true };
-        stationRef.current = updatedStations;
-        setStationState(updatedStations);
-        if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
-        setActiveMinigame({ type: 'cook', itemType: '🍲' });
-        return;
-      } else if (step && (step.id === 'place_tomato_pot' || step.id === 'place_chicken_pot' || step.id === 'place_onion_pot')) {
-        if (curHolding) {
-          updateHolding(null, 'raw');
-          triggerAchievement(`✅ ${curHolding} ajouté au pot avec succès !`, 'success', 2500);
-          updateActiveStep(activeStepIndexRef.current + 1);
-        } else {
-          triggerAchievement("⚠️ Vous devez tenir un ingrédient coupé pour l'ajouter !", 'error', 2500);
+      if (isWorld1) {
+        if (step && step.id === 'cook_pot') {
+          const updatedStations = { ...stationRef.current, potCooking: true };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+          setActiveMinigame({ type: 'cook', itemType: '🍲' });
+          return;
+        } else if (step && (step.id === 'place_tomato_pot' || step.id === 'place_chicken_pot' || step.id === 'place_onion_pot')) {
+          if (curHolding) {
+            updateHolding(null, 'raw');
+            advanceStep(activeStepIndexRef.current + 1);
+          }
+          return;
         }
-        return;
+      } else {
+        // Worlds 2 & 3 normal workflow: if holding chopped item, cook in pot
+        if (curHolding && curState === 'chopped') {
+          updateHolding(null, 'raw');
+          const updatedStations = { ...stationRef.current, potCooking: true };
+          stationRef.current = updatedStations;
+          setStationState(updatedStations);
+          if (db && roomCode) update(ref(db, `rooms/${roomCode}/stations`), updatedStations);
+          setActiveMinigame({ type: 'cook', itemType: '🍲' });
+          return;
+        } else if (curHolding && curState === 'cooked' && step && step.id === 'serve') {
+          // Ready to serve
+          return;
+        }
       }
     }
 
     // 4. Picking up floating chicken in World 1
-    if (currentWorldIndexRef.current === 0 && Math.abs(px - chickenPos.x) < 60 && Math.abs(py - chickenPos.y) < 60) {
+    if (isWorld1 && Math.abs(px - chickenPos.x) < 60 && Math.abs(py - chickenPos.y) < 60) {
       if (step && step.id === 'catch_chicken') {
         updateHolding('🍗', 'raw');
-        triggerAchievement("✅ Poulet attrapé avec succès !", 'success', 3000);
-        updateActiveStep(activeStepIndexRef.current + 1);
+        advanceStep(activeStepIndexRef.current + 1);
         return;
       }
     }
@@ -650,26 +620,25 @@ export default function App() {
       });
 
       if (pickedItem) {
-        const isRightTarget = step && (step.targetItem === pickedItem.type || (step.id === 'spice_matrix' && ['🌶️', '🧄', '🍋'].includes(pickedItem.type)));
+        const isRightTarget = isWorld1 ? (step && step.targetItem === pickedItem.type) : true;
         if (isRightTarget) {
           const nextItems = itemsRef.current.filter((_, i) => i !== pickedItemIndex);
           setWorldItems(nextItems);
           itemsRef.current = nextItems;
 
           updateHolding(pickedItem.type, pickedItem.state || 'raw');
-          triggerAchievement(`✅ ${pickedItem.type} pris en main !`, 'success', 3000);
-          if (step.targetItem === pickedItem.type) {
-            updateActiveStep(activeStepIndexRef.current + 1);
+          if (isWorld1) {
+            advanceStep(activeStepIndexRef.current + 1);
+          } else {
+            advanceStep(1, '2. Couper sur la Planche 🔪');
           }
-        } else {
-          triggerAchievement(`❌ Ce n'est pas le bon ingrédient pour cette étape !`, 'error', 2500);
         }
       }
     }
   };
 
   const handleJumpAction = () => {
-    if (gameState !== 'playing' || isHost || countdown !== null || activeMinigame !== null || isGameFinished || showSpiceGrid) return;
+    if (gameState !== 'playing' || isHost || countdown !== null || activeMinigame !== null || isGameFinished) return;
     if (jumpsRef.current > 0) {
       velRef.current.y = -13;
       jumpsRef.current -= 1;
@@ -685,7 +654,7 @@ export default function App() {
       if (e.key === ' ') {
         e.preventDefault();
         handleSpaceAction();
-      } else if (!activeMinigame && !showSpiceGrid && countdown === null && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
+      } else if (!activeMinigame && countdown === null && (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') && jumpsRef.current > 0) {
         e.preventDefault();
         handleJumpAction();
       }
@@ -701,17 +670,17 @@ export default function App() {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [gameState, isHost, activeMinigame, showSpiceGrid, countdown, isGameFinished]);
+  }, [gameState, isHost, activeMinigame, countdown, isGameFinished]);
 
   useEffect(() => {
-    if (gameState !== 'playing' || isHost || isGameFinished || showSpiceGrid) return;
+    if (gameState !== 'playing' || isHost || isGameFinished) return;
 
     const gravity = 0.65;
     const friction = 0.82;
     const moveSpeed = 1.45;
 
     const interval = setInterval(() => {
-      if (countdown !== null || activeMinigame !== null || showSpiceGrid) return;
+      if (countdown !== null || activeMinigame !== null) return;
 
       const activeWorldCfg = WORLDS_CONFIG[currentWorldIndexRef.current];
       const floorY = viewportRef.current.h - GROUND_HEIGHT;
@@ -793,7 +762,7 @@ export default function App() {
     }, 20);
 
     return () => clearInterval(interval);
-  }, [gameState, isHost, countdown, activeMinigame, showSpiceGrid, isGameFinished]);
+  }, [gameState, isHost, countdown, activeMinigame, isGameFinished]);
 
   useEffect(() => {
     if (!db || !roomCode) return;
@@ -904,17 +873,26 @@ export default function App() {
 
   const currentStepObj = currentRecipe.steps[activeStepIndex] || currentRecipe.steps[0];
   let targetWorldX = 220;
-  if (currentStepObj.id === 'catch_chicken') {
-    targetWorldX = chickenPos.x;
-  } else if (currentStepObj.id.includes('cut')) {
-    targetWorldX = stations.cuttingBoard.x;
-  } else if (currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook') || currentStepObj.id === 'spice_matrix') {
-    targetWorldX = stations.pot.x;
-  } else if (currentStepObj.id === 'serve') {
-    targetWorldX = stations.counter.x;
+  const isWorld1 = currentWorldIndex === 0;
+
+  if (isWorld1) {
+    if (currentStepObj.id === 'catch_chicken') {
+      targetWorldX = chickenPos.x;
+    } else if (currentStepObj.id.includes('cut')) {
+      targetWorldX = stations.cuttingBoard.x;
+    } else if (currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook')) {
+      targetWorldX = stations.pot.x;
+    } else if (currentStepObj.id === 'serve') {
+      targetWorldX = stations.counter.x;
+    } else {
+      const foundItem = worldItems.find(i => i.type === currentStepObj.targetItem) || worldItems[0];
+      targetWorldX = foundItem ? foundItem.x : 220;
+    }
   } else {
-    const foundItem = worldItems.find(i => i.type === currentStepObj.targetItem) || worldItems[0];
-    targetWorldX = foundItem ? foundItem.x : 220;
+    if (activeStepIndex === 0) targetWorldX = worldItems[0] ? worldItems[0].x : 220;
+    else if (activeStepIndex === 1) targetWorldX = stations.cuttingBoard.x;
+    else if (activeStepIndex === 2) targetWorldX = stations.pot.x;
+    else targetWorldX = stations.counter.x;
   }
 
   const viewWidthWorld = viewport.w / zoom;
@@ -1112,6 +1090,11 @@ export default function App() {
             <span>🍲 Plats: {stationState.servedDishes}/3</span>
           </div>
 
+          {/* Persistent Top Instruction Banner */}
+          <div style={styles.persistentBanner}>
+            💡 <strong>Tâche Actuelle :</strong> {persistentMessage}
+          </div>
+
           {isGameFinished && (
             <div style={{ position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.94)', backdropFilter: 'blur(10px)', zIndex: 300, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <div style={{ background: '#1e1b4b', border: '3px solid #fbbf24', borderRadius: '28px', padding: '40px', width: '100%', maxWidth: '600px', textAlign: 'center', boxShadow: '0 25px 60px rgba(0,0,0,0.8)' }}>
@@ -1145,63 +1128,12 @@ export default function App() {
 
           {isTargetToLeft && (
             <div style={styles.compassLeft} className="pulsing-compass-left">
-              <span style={{ fontSize: '1.8rem' }}>⬅️ 🌟</span> Hors écran (À gauche)
+              <span style={{ fontSize: '1.8rem' }}>⬅️ 🌟</span> Cible (À gauche)
             </div>
           )}
           {isTargetToRight && (
             <div style={styles.compassRight} className="pulsing-compass-right">
-              Hors écran (À droite) <span style={{ fontSize: '1.8rem' }}>🌟 ➡️</span>
-            </div>
-          )}
-
-          {achievementBanner.visible && (
-            <div style={{ position: 'fixed', top: '80px', left: '50%', transform: 'translateX(-50%)', background: achievementBanner.status === 'success' ? 'rgba(16, 185, 129, 0.95)' : achievementBanner.status === 'error' ? 'rgba(239, 68, 68, 0.95)' : 'rgba(59, 130, 246, 0.95)', color: '#fff', padding: '12px 24px', borderRadius: '16px', fontSize: '1.1rem', fontWeight: '900', zIndex: 100, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', animation: 'popCountdown 0.3s ease-out' }}>
-              {achievementBanner.text}
-            </div>
-          )}
-
-          <div style={{ position: 'fixed', top: '70px', right: '20px', background: 'rgba(15, 23, 42, 0.9)', border: '2px solid rgba(251, 191, 36, 0.4)', padding: '14px 18px', borderRadius: '14px', zIndex: 50, width: '290px', boxShadow: '0 10px 25px rgba(0,0,0,0.4)', maxHeight: '75vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: '0.95rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
-              📜 {currentRecipe.name}
-            </div>
-            {currentRecipe.steps.map((step, idx) => {
-              const isCurrent = idx === activeStepIndex;
-              const isDone = idx < activeStepIndex;
-              return (
-                <div key={idx} style={{ fontSize: '0.80rem', fontWeight: '700', color: isDone ? '#34d399' : isCurrent ? '#38bdf8' : '#64748b', margin: '4px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span>{isDone ? '✅' : isCurrent ? '➡️' : '⏳'}</span>
-                  <span style={{ textDecoration: isDone ? 'line-through' : 'none' }}>{step.label}</span>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 3x3 Spice Grid Modal */}
-          {showSpiceGrid && (
-            <div style={styles.minigameOverlay}>
-              <div style={{ ...styles.minigameBox, maxWidth: '520px' }}>
-                <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fbbf24', marginBottom: '8px' }}>
-                  🌶️🧄🍋 Grille 3x3 des Épices du Tajine
-                </div>
-                <p style={{ color: '#cbd5e1', fontSize: '0.9rem', marginBottom: '14px' }}>
-                  Sélectionnez une épice ci-dessous, puis remplissez les 9 cases de la table pour qu'il y ait exactement <strong>3 Piments (🌶️), 3 Ails (🧄) et 3 Citrons (🍋)</strong> au total !
-                </p>
-                <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '20px' }}>
-                  {['🌶️', '🧄', '🍋'].map(spice => (
-                    <button key={spice} onClick={() => setSelectedSpiceType(spice)} style={{ ...styles.secondaryBtn, width: '70px', padding: '10px', fontSize: '1.5rem', background: selectedSpiceType === spice ? '#10b981' : '#374151' }}>
-                      {spice}
-                    </button>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '24px' }}>
-                  {spiceGridCells.map((cell, idx) => (
-                    <button key={idx} onClick={() => handleCellClick(idx)} style={{ height: '70px', background: '#0f172a', border: '2px solid rgba(255,255,255,0.2)', borderRadius: '12px', fontSize: '2rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {cell || '·'}
-                    </button>
-                  ))}
-                </div>
-                <button onClick={validateSpiceGrid} style={styles.minigameActionBtn}>Valider la Grille 3x3 🎯</button>
-              </div>
+              Cible (À droite) <span style={{ fontSize: '1.8rem' }}>🌟 ➡️</span>
             </div>
           )}
 
@@ -1282,14 +1214,14 @@ export default function App() {
               return <div key={idx} style={{ ...styles.platform, left: `${p.x}px`, top: `${platTop}px`, width: `${p.w}px`, height: `${p.h}px` }} />;
             })}
 
-            {currentWorldIndex === 0 && (
+            {isWorld1 && (
               <div style={{ position: 'absolute', left: `${chickenPos.x}px`, top: `${chickenPos.y}px`, zIndex: 22, fontSize: '2.5rem' }} className="holding-arrow">
                 🍗
               </div>
             )}
 
             <div style={{ position: 'absolute', left: `${stations.cuttingBoard.x - 35}px`, top: `${cbTop}px`, textAlign: 'center' }}>
-              {currentStepObj.id.includes('cut') && isTargetVisible && (
+              {isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
@@ -1308,7 +1240,7 @@ export default function App() {
             </div>
 
             <div style={{ position: 'absolute', left: `${stations.pot.x - 35}px`, top: `${potTop}px`, textAlign: 'center' }}>
-              {(currentStepObj.id.includes('pot') || currentStepObj.id.includes('cook') || currentStepObj.id === 'spice_matrix') && isTargetVisible && (
+              {isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '12px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               <div style={styles.stationStand}>
@@ -1320,7 +1252,7 @@ export default function App() {
             </div>
 
             <div style={{ position: 'absolute', left: `${stations.counter.x - 26}px`, top: `${counterTop}px`, textAlign: 'center' }}>
-              {currentStepObj.id === 'serve' && isTargetVisible && (
+              {isTargetVisible && (
                 <div className="holding-arrow" style={{ position: 'absolute', top: '-48px', left: '6px', fontSize: '2.5rem', color: '#fbbf24', fontWeight: '900', zIndex: 10, textShadow: '0 0 10px #f59e0b' }}>▼</div>
               )}
               {portalActive && (
@@ -1333,7 +1265,7 @@ export default function App() {
               const itemPlatform = worldConfig.platforms.find(p => item.x >= p.x - 15 && item.x <= p.x + p.w + 15);
               const itemTop = itemPlatform ? floorY - itemPlatform.offsetFromGround - 34 : floorY - 34;
 
-              const isTargetItem = currentStepObj.targetItem === item.type || (currentStepObj.id === 'spice_matrix' && ['🌶️', '🧄', '🍋'].includes(item.type));
+              const isTargetItem = isWorld1 ? currentStepObj.targetItem === item.type : true;
               const isItemVisibleOnScreen = isTargetItem && isTargetVisible;
 
               return (
@@ -1407,6 +1339,7 @@ const styles = {
   logsBox: { background: '#0f172a', padding: '12px', borderRadius: '10px', fontSize: '0.95rem', color: '#cbd5e1', height: '200px', overflowY: 'auto' },
   gameContainer: { width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' },
   hudBar: { position: 'fixed', top: '16px', left: '20px', zIndex: 50, display: 'flex', gap: '16px', background: 'rgba(15, 23, 42, 0.85)', padding: '10px 18px', borderRadius: '12px', fontWeight: '800', fontSize: '0.95rem', border: '1px solid rgba(255,255,255,0.15)' },
+  persistentBanner: { position: 'fixed', top: '70px', left: '50%', transform: 'translateX(-50%)', background: 'rgba(59, 130, 246, 0.92)', border: '2px solid rgba(251, 191, 36, 0.6)', color: '#fff', padding: '12px 24px', borderRadius: '16px', fontSize: '1.05rem', fontWeight: '900', zIndex: 60, boxShadow: '0 10px 25px rgba(0,0,0,0.5)', whiteSpace: 'nowrap' },
   inWorldBackgroundBanner: { background: 'rgba(15, 23, 42, 0.7)', border: '2px solid rgba(251, 191, 36, 0.4)', borderRadius: '14px', padding: '8px', width: '220px', boxShadow: '0 5px 15px rgba(0,0,0,0.3)', zIndex: 2 },
   bannerHeader: { fontSize: '0.85rem', fontWeight: '900', color: '#fbbf24', borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: '4px' },
   compassLeft: { position: 'fixed', left: '20px', top: '50%', background: 'rgba(15, 23, 42, 0.92)', border: '3px solid #fbbf24', color: '#fbbf24', padding: '14px 20px', borderRadius: '16px', fontWeight: '900', fontSize: '1.1rem', zIndex: 50, display: 'flex', alignItems: 'center', gap: '10px' },
